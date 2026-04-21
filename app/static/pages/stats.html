@@ -41,16 +41,21 @@
       </div>
 
       <div class="section-sub">Walking</div>
-      <div class="grid-2">
-        <div class="field">
+        <div class="field" style="margin-bottom:10px">
+          <label>Input type</label>
+          <div class="toggle">
+            <button class="active" id="btn-walk-km" onclick="setWalkInput('km')">Distance (km)</button>
+            <button id="btn-walk-steps" onclick="setWalkInput('steps')">Steps</button>
+          </div>
+        </div>
+        <div class="field" id="walk-km-field">
           <label>Distance (km)</label>
-          <input type="number" id="walk-km" placeholder="16" step="0.1"/>
+          <input type="number" id="walk-km" placeholder="e.g. 16" step="0.1" min="0" max="100"/>
         </div>
-        <div class="field">
+        <div class="field hidden" id="walk-steps-field">
           <label>Steps</label>
-          <input type="number" id="steps" placeholder="20000"/>
+          <input type="number" id="steps" placeholder="e.g. 20000" min="0" max="200000"/>
         </div>
-      </div>
 
       <div class="section-sub">Gym</div>
       <div class="field">
@@ -81,7 +86,8 @@
     </div>
 
     <!-- RECENT -->
-    <div class="card">
+    <!-- RECENT -->
+<div class="card">
   <div class="card-label">Last 7 days</div>
   <div class="table-wrap">
     <table>
@@ -89,7 +95,7 @@
         <tr>
           <th>Date</th>
           <th>Weight</th>
-          <th>Walk km</th>
+          <th>Walk</th>
           <th>Walk kcal</th>
           <th>Gym</th>
           <th>Gym kcal</th>
@@ -108,7 +114,7 @@
 
   <script>
     renderNav('stats');
-    let gymDone = false;
+    let gymDone = null;
 
     document.getElementById('log-date').value = today();
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -119,28 +125,43 @@
       document.getElementById('btn-gym-yes').classList.toggle('active', val);
       document.getElementById('gym-fields').classList.toggle('hidden', !val);
     }
+    let walkInputMode = 'km';
 
+    function setWalkInput(mode) {
+      walkInputMode = mode;
+      document.getElementById('btn-walk-km').classList.toggle('active', mode === 'km');
+      document.getElementById('btn-walk-steps').classList.toggle('active', mode === 'steps');
+      document.getElementById('walk-km-field').classList.toggle('hidden', mode !== 'km');
+      document.getElementById('walk-steps-field').classList.toggle('hidden', mode !== 'steps');
+      // clear the inactive field value
+      if (mode === 'km') document.getElementById('steps').value = '';
+      else document.getElementById('walk-km').value = '';
+    }
     async function saveStats() {
       const alertEl = document.getElementById('alert-area');
 
-      const walkKm = parseFloat(document.getElementById('walk-km').value) || null;
-      const steps = parseInt(document.getElementById('steps').value) || null;
+      const weight = parseFloat(document.getElementById('weight').value) || null;
+      const walkKm = walkInputMode === 'km'
+        ? parseFloat(document.getElementById('walk-km').value) || null
+        : null;
+      const steps = walkInputMode === 'steps'
+        ? parseInt(document.getElementById('steps').value) || null
+        : null;
 
-      const payload = {
-        date: document.getElementById('log-date').value,
-        weight_kg: parseFloat(document.getElementById('weight').value) || null,
-        walk_km: walkKm,
-        steps: steps,
-        gym_done: gymDone,
-        gym_mins: gymDone ? parseInt(document.getElementById('gym-mins').value) || null : null,
-        gym_intensity: gymDone ? document.getElementById('gym-intensity').value : null,
-        is_fasting: false
-      };
+      const payload = { date: document.getElementById('log-date').value };
 
-      // warn if both km and steps are filled
-      if (walkKm && steps) {
-        alertEl.innerHTML = '<div class="alert alert-warn">⚠ Both km and steps are filled. Using km — clear one field to avoid confusion.</div>';
-        payload.steps = null;
+      if (weight !== null) payload.weight_kg = weight;
+      if (walkKm !== null) payload.walk_km = walkKm;
+      if (steps !== null) payload.steps = steps;
+
+      if (gymDone !== null) {
+        payload.gym_done = gymDone;
+        if (gymDone) {
+          const mins = parseInt(document.getElementById('gym-mins').value) || null;
+          const intensity = document.getElementById('gym-intensity').value;
+          if (mins) payload.gym_mins = mins;
+          if (intensity) payload.gym_intensity = intensity;
+        }
       }
 
       try {
@@ -154,18 +175,14 @@
     }
 
     async function loadRecent() {
-  const to = today();
-  const from = new Date();
-  from.setDate(from.getDate() - 6);
-  const fromStr = from.toISOString().split('T')[0];
+  const tbody = document.getElementById('stats-tbody');
+  tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">Loading...</td></tr>';
 
   try {
-    const tbody = document.getElementById('stats-tbody');
-
-    // fetch daily summaries for last 7 days
     const days = [];
-    const cur = new Date(fromStr);
-    while (cur <= new Date(to)) {
+    const cur = new Date();
+    cur.setDate(cur.getDate() - 6);
+    for (let i = 0; i < 7; i++) {
       days.push(cur.toISOString().split('T')[0]);
       cur.setDate(cur.getDate() + 1);
     }
@@ -175,34 +192,72 @@
     );
 
     const rows = summaries.filter(Boolean).reverse();
-    if (!rows.length) {
+    const loggedRows = rows.filter(r => r.stats_logged);
+
+    if (!loggedRows.length) {
       tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">No stats logged yet.</td></tr>';
       return;
     }
 
     tbody.innerHTML = rows.map(s => {
+      if (!s.stats_logged) return '';
+
       const defVal = s.deficit;
-      const defStr = defVal != null
-        ? `<span style="color:${defVal > 0 ? 'var(--accent)' : 'var(--danger)'}">${defVal > 0 ? '−' : '+'}${Math.abs(Math.round(defVal))}</span>`
-        : '—';
+      let defStr = '—';
+      if (defVal != null) {
+        const color = defVal > 0 ? 'var(--accent)' : 'var(--danger)';
+        const sign = defVal > 0 ? '−' : '+';
+        defStr = `<span style="color:${color}">${sign}${Math.abs(Math.round(defVal))}</span>`;
+      }
+
+      const gymStr = s.gym_done
+        ? `${s.gym_mins}min · ${s.gym_intensity}`
+        : 'Rest';
+
       return `<tr>
-        <td>${s.date}</td>
-        <td>${s.weight_kg ?? '—'}</td>
-        <td>${s.walk_km ?? '—'}</td>
+        <td style="font-family:'DM Mono',monospace">${s.date}</td>
+        <td>${s.weight_kg != null ? s.weight_kg + ' kg' : '—'}</td>
+        <td>${s.walk_km != null ? s.walk_km + ' km' : '—'}</td>
         <td>${s.walk_cals != null ? Math.round(s.walk_cals) : '—'}</td>
-        <td>${s.gym_done ? s.gym_mins + 'min · ' + s.gym_intensity : s.stats_logged ? 'Rest' : '—'}</td>
-        <td>${s.gym_cals != null ? Math.round(s.gym_cals) : '—'}</td>
+        <td>${gymStr}</td>
+        <td>${s.gym_done && s.gym_cals != null ? Math.round(s.gym_cals) : '—'}</td>
         <td>${s.tdee != null ? Math.round(s.tdee) : '—'}</td>
         <td>${s.total_calories > 0 ? Math.round(s.total_calories) : '—'}</td>
         <td>${defStr}</td>
       </tr>`;
-    }).join('');
+    }).filter(Boolean).join('');
+
+    if (!tbody.innerHTML.trim()) {
+      tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">No stats logged yet.</td></tr>';
+    }
+
   } catch(e) {
-    console.error(e);
+    console.error('loadRecent error:', e);
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">Error loading stats.</td></tr>';
   }
 }
 
-    loadRecent();
+//     async function loadTodayStats() {
+//   try {
+//     const s = await API.get(`/stats/${today()}`);
+//     if (s.weight_kg) document.getElementById('weight').value = s.weight_kg;
+//     if (s.walk_km) {
+//       setWalkInput('km');
+//       document.getElementById('walk-km').value = s.walk_km;
+//     } else if (s.steps) {
+//       setWalkInput('steps');
+//       document.getElementById('steps').value = s.steps;
+//     }
+//     if (s.gym_done) {
+//       setGym(true);
+//       if (s.gym_mins) document.getElementById('gym-mins').value = s.gym_mins;
+//       if (s.gym_intensity) document.getElementById('gym-intensity').value = s.gym_intensity;
+//     }
+//   } catch(e) {}
+// }
+
+// loadTodayStats();
+loadRecent();
   </script>
 </body>
 </html>

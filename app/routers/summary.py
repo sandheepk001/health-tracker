@@ -57,33 +57,40 @@ def compute_daily(user_id: int, log_date: date, db: Session):
     gym_cals = None
     deficit = None
     effective_km = None
-
-    if stats and stats.weight_kg and user:
-        # resolve effective km from walk_km or steps
-        if stats.walk_km:
-            effective_km = stats.walk_km
-        elif stats.steps and user:
-            step_length_km = (user.height_cm * 0.413) / 100000
-            effective_km = round(stats.steps * step_length_km, 2)
-
-        bmr = round(calc_bmr(stats.weight_kg, user.height_cm, user.age, user.gender), 2)
-        walk_cals, gym_cals = calc_activity_cals(
-            stats.weight_kg,
-            stats.walk_km,
-            stats.steps,
-            stats.gym_done,
-            stats.gym_mins,
-            stats.gym_intensity,
-            user.height_cm
-        )
-        tdee = round(bmr + walk_cals + gym_cals, 2)
-        if total_calories > 0:
-            deficit = round(tdee - total_calories, 2)
-
-    # after fetching stats
     is_fasting = stats.is_fasting if stats else False
 
-    # in the return dict, update total_calories handling
+    if stats and user:
+        # use logged weight, fall back to latest available weight
+        weight = stats.weight_kg
+        if not weight:
+            latest = db.query(UserStats).filter(
+                UserStats.user_id == user_id,
+                UserStats.weight_kg.isnot(None),
+                UserStats.date <= log_date
+            ).order_by(UserStats.date.desc()).first()
+            weight = latest.weight_kg if latest else None
+
+        if weight:
+            if stats.walk_km:
+                effective_km = stats.walk_km
+            elif stats.steps:
+                step_length_km = (user.height_cm * 0.413) / 100000
+                effective_km = round(stats.steps * step_length_km, 2)
+
+            bmr = round(calc_bmr(weight, user.height_cm, user.age, user.gender), 2)
+            walk_cals, gym_cals = calc_activity_cals(
+                weight,
+                stats.walk_km,
+                stats.steps,
+                stats.gym_done,
+                stats.gym_mins,
+                stats.gym_intensity,
+                user.height_cm
+            )
+            tdee = round(bmr + walk_cals + gym_cals, 2)
+            if total_calories > 0:
+                deficit = round(tdee - total_calories, 2)
+
     return {
         "date": log_date,
         "is_fasting": is_fasting,
@@ -103,7 +110,7 @@ def compute_daily(user_id: int, log_date: date, db: Session):
         "walk_cals": walk_cals,
         "gym_cals": gym_cals,
         "tdee": tdee,
-        "deficit": round(tdee, 2) if is_fasting and tdee else deficit,
+        "deficit": round(tdee - total_calories, 2) if is_fasting and tdee else deficit,
     }
 
 

@@ -20,18 +20,20 @@ def log_stats(
         UserStats.date == payload.date
     ).first()
 
-    if existing:
-        data = payload.model_dump(exclude_none=True)
+    # only update fields that were explicitly provided in the request
+    # exclude_unset=True means only fields the caller actually sent
+    data = payload.model_dump(exclude_unset=True)
+    data.pop('date', None)
 
-        # if updating walk_km, clear steps and vice versa
-        # so old value doesn't persist alongside new one
+    if existing:
+        # if updating walk_km clear steps and vice versa
         if 'walk_km' in data and data['walk_km'] is not None:
             existing.steps = None
         if 'steps' in data and data['steps'] is not None:
             existing.walk_km = None
 
-        # if gym_done is being set to False, clear gym details
-        if 'gym_done' in data and data['gym_done'] is False:
+        # if gym_done is being set to False clear gym details
+        if data.get('gym_done') is False:
             existing.gym_mins = None
             existing.gym_intensity = None
 
@@ -42,11 +44,22 @@ def log_stats(
         db.refresh(existing)
         return existing
 
-    stats = UserStats(user_id=current_user.id, **payload.model_dump())
-    db.add(stats)
+    # new entry — set defaults for unset fields
+    new_stats = UserStats(
+        user_id=current_user.id,
+        date=payload.date,
+        weight_kg=data.get('weight_kg'),
+        walk_km=data.get('walk_km'),
+        steps=data.get('steps'),
+        gym_done=data.get('gym_done', False),
+        gym_mins=data.get('gym_mins'),
+        gym_intensity=data.get('gym_intensity'),
+        is_fasting=data.get('is_fasting', False)
+    )
+    db.add(new_stats)
     db.commit()
-    db.refresh(stats)
-    return stats
+    db.refresh(new_stats)
+    return new_stats
 
 @router.get("/weight/history", response_model=list[StatsOut])
 def weight_history(
@@ -57,22 +70,6 @@ def weight_history(
         UserStats.user_id == current_user.id,
         UserStats.weight_kg.isnot(None)
     ).order_by(UserStats.date.asc()).all()
-
-@router.delete("/weight/{stat_id}")
-def delete_weight_entry(
-    stat_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    stat = db.query(UserStats).filter(
-        UserStats.id == stat_id,
-        UserStats.user_id == current_user.id
-    ).first()
-    if not stat:
-        raise HTTPException(status_code=404, detail="Entry not found")
-    stat.weight_kg = None
-    db.commit()
-    return {"detail": "Weight entry removed"}
 
 @router.get("/{log_date}", response_model=StatsOut)
 def get_stats(

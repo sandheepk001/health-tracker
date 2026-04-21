@@ -13,10 +13,10 @@ class StatsCreate(BaseModel):
     weight_kg: Optional[float] = None
     walk_km: Optional[float] = None
     steps: Optional[int] = None
-    gym_done: bool = False
+    gym_done: Optional[bool] = None
     gym_mins: Optional[int] = None
     gym_intensity: Optional[IntensityEnum] = None
-    is_fasting: bool = False
+    is_fasting: Optional[bool] = None
 
 class StatsOut(StatsCreate):
     id: int

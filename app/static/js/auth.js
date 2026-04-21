@@ -23,26 +23,52 @@ async function handleRegisterSendOTP(e) {
   errEl.classList.add('hidden');
   sucEl.classList.add('hidden');
 
-  const payload = {
-    email: document.getElementById('email').value,
-    password: document.getElementById('password').value,
-    name: document.getElementById('name').value,
-    gender: document.getElementById('gender').value,
-    age: parseInt(document.getElementById('age').value),
-    height_cm: parseFloat(document.getElementById('height').value),
-  };
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const gender = document.getElementById('gender').value;
+  const age = parseInt(document.getElementById('age').value);
+  const height = parseFloat(document.getElementById('height').value);
+  const initialWeight = parseFloat(document.getElementById('initial-weight').value) || null;
 
-  if (!payload.name || !payload.email || !payload.password || !payload.age || !payload.height_cm) {
-    errEl.textContent = 'Please fill in all fields.';
+  // ── validate all fields before anything else ──
+  function showError(msg) {
+    errEl.textContent = msg;
     errEl.classList.remove('hidden');
-    return;
+    errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+
+  if (!name) return showError('Full name is required.');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return showError('Please enter a valid email address.');
+  if (!password || password.length < 6)
+    return showError('Password must be at least 6 characters.');
+  if (!age || isNaN(age))
+    return showError('Please enter your age.');
+  if (age < 10 || age > 100)
+    return showError('Age must be between 10 and 100 years.');
+  if (!height || isNaN(height))
+    return showError('Please enter your height.');
+  if (height < 100 || height > 250)
+    return showError('Height must be between 100 and 250 cm.');
+  if (initialWeight !== null && (initialWeight < 20 || initialWeight > 300))
+    return showError('Weight must be between 20 and 300 kg.');
+
+  // ── all valid — now call API ──
+  const payload = {
+    email,
+    password,
+    name,
+    gender,
+    age,
+    height_cm: height,
+    initial_weight: initialWeight
+  };
 
   try {
     await API.post('/auth/register/send-otp', payload);
     sucEl.textContent = 'OTP sent to your email.';
     sucEl.classList.remove('hidden');
-    // show OTP section
     document.getElementById('otp-section').classList.remove('hidden');
     document.getElementById('send-otp-btn').classList.add('hidden');
     document.getElementById('form-fields').style.opacity = '0.5';
@@ -54,7 +80,6 @@ async function handleRegisterSendOTP(e) {
     errEl.classList.remove('hidden');
   }
 }
-
 async function handleRegisterVerifyOTP() {
   const errEl = document.getElementById('error');
   const sucEl = document.getElementById('success');
@@ -125,13 +150,14 @@ async function resendRegisterOTP() {
   sucEl.classList.add('hidden');
 
   const payload = {
-    email: document.getElementById('email').value,
-    password: document.getElementById('password').value,
-    name: document.getElementById('name').value,
-    gender: document.getElementById('gender').value,
-    age: parseInt(document.getElementById('age').value),
-    height_cm: parseFloat(document.getElementById('height').value),
-  };
+  email: document.getElementById('email').value,
+  password: document.getElementById('password').value,
+  name: document.getElementById('name').value,
+  gender: document.getElementById('gender').value,
+  age: parseInt(document.getElementById('age').value),
+  height_cm: parseFloat(document.getElementById('height').value),
+  initial_weight: parseFloat(document.getElementById('initial-weight').value) || null,
+};
 
   try {
     await API.post('/auth/register/send-otp', payload);

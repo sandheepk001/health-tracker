@@ -263,10 +263,13 @@ async function loadWeightHistory() {
     const user = await API.get('/users/me');
     currentUser = user;
 
-    // prepend initial weight as first point if set and earlier than first stat entry
-    let chartData = [...data];
+    // filter out hidden entries for profile display only
+    const hidden = JSON.parse(localStorage.getItem('hidden_weight_ids') || '[]');
+    const visibleData = data.filter(d => !hidden.includes(d.id));
+
+    let chartData = [...visibleData];
     if (user.initial_weight) {
-      const firstStatDate = data.length ? data[0].date : null;
+      const firstStatDate = visibleData.length ? visibleData[0].date : null;
       const initEntry = {
         id: null,
         date: firstStatDate
@@ -275,7 +278,6 @@ async function loadWeightHistory() {
         weight_kg: user.initial_weight,
         isInitial: true
       };
-      // only prepend if it comes before the first real entry
       if (!firstStatDate || initEntry.date < firstStatDate) {
         chartData = [initEntry, ...chartData];
       }
@@ -293,12 +295,14 @@ async function loadWeightHistory() {
     document.getElementById('weight-graph-area').style.display = 'block';
 
     const startW = chartData[0].weight_kg;
-    const latestW = data.length ? data[data.length - 1].weight_kg : user.initial_weight;
+    const latestW = visibleData.length
+      ? visibleData[visibleData.length - 1].weight_kg
+      : user.initial_weight;
     const change = +(latestW - startW).toFixed(2);
     currentWeight = latestW;
 
     document.getElementById('r-current-weight').textContent = latestW + ' kg';
-    document.getElementById('wh-start').textContent = startW + (chartData[0].isInitial ? '' : '');
+    document.getElementById('wh-start').textContent = startW;
     document.getElementById('wh-current').textContent = latestW;
 
     const changeEl = document.getElementById('wh-change');
@@ -306,7 +310,7 @@ async function loadWeightHistory() {
     changeEl.style.color = change < 0 ? 'var(--accent)' : change > 0 ? 'var(--danger)' : 'var(--text)';
 
     renderChart(chartData);
-    renderList(data); // list still shows only real stat entries (deletable)
+    renderList(visibleData, hidden, data);
   } catch(e) { console.error(e); }
 }
 
@@ -374,9 +378,11 @@ async function loadWeightHistory() {
   });
 }
 
-    function renderList(data) {
-      const reversed = [...data].reverse();
-      document.getElementById('weight-list').innerHTML = reversed.map((entry, i) => {
+    function renderList(visibleData, hidden, allData) {
+      const reversed = [...visibleData].reverse();
+      const hiddenEntries = allData.filter(d => hidden.includes(d.id));
+
+      let html = reversed.map((entry, i) => {
         const prev = reversed[i + 1];
         let trendHTML = '';
         if (prev) {
@@ -390,26 +396,50 @@ async function loadWeightHistory() {
           <div class="weight-actions">
             ${trendHTML}
             <div class="weight-val">${entry.weight_kg} kg</div>
-            <button class="btn btn-danger btn-sm" onclick="removeWeight(${entry.id}, '${entry.date}')">✕</button>
+            <button class="btn btn-secondary btn-sm" onclick="removeWeight(${entry.id}, '${entry.date}')">Hide</button>
           </div>
         </div>`;
       }).join('');
+
+      // show hidden entries at bottom with restore option
+      if (hiddenEntries.length) {
+        html += `<div style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border)">
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;
+            color:var(--text3);margin-bottom:0.75rem">Hidden entries</div>`;
+        hiddenEntries.forEach(entry => {
+          html += `<div class="weight-entry" style="opacity:0.5">
+            <div class="weight-date">${entry.date}</div>
+            <div class="weight-actions">
+              <div class="weight-val">${entry.weight_kg} kg</div>
+              <button class="btn btn-secondary btn-sm" onclick="restoreWeight(${entry.id})">Restore</button>
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+
+      document.getElementById('weight-list').innerHTML = html || '<div style="font-size:13px;color:var(--text3)">No entries.</div>';
     }
 
     async function removeWeight(id, date) {
-      if (!confirm(`Remove weight entry for ${date}?\nWalk and gym data for that day will be kept.`)) return;
-      try {
-        await API.delete(`/stats/weight/${id}`);
-        await loadWeightHistory();
-        document.getElementById('alert-area').innerHTML =
-          '<div class="alert alert-success">Weight entry removed.</div>';
-        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
-      } catch(e) {
-        document.getElementById('alert-area').innerHTML =
-          `<div class="alert alert-danger">${e.message}</div>`;
-      }
-    }
+      if (!confirm(`Hide weight entry for ${date} from this chart?\nData will be preserved everywhere else.`)) return;
 
+      // store hidden IDs in localStorage
+      const hidden = JSON.parse(localStorage.getItem('hidden_weight_ids') || '[]');
+      if (!hidden.includes(id)) hidden.push(id);
+      localStorage.setItem('hidden_weight_ids', JSON.stringify(hidden));
+
+      await loadWeightHistory();
+      document.getElementById('alert-area').innerHTML =
+        '<div class="alert alert-success">Entry hidden from profile chart.</div>';
+      setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+    }
+    function restoreWeight(id) {
+      const hidden = JSON.parse(localStorage.getItem('hidden_weight_ids') || '[]');
+      const updated = hidden.filter(h => h !== id);
+      localStorage.setItem('hidden_weight_ids', JSON.stringify(updated));
+      loadWeightHistory();
+    }
     async function saveProfile() {
       const alertEl = document.getElementById('alert-area');
       try {
