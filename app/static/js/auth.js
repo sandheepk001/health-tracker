@@ -1,3 +1,21 @@
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const errEl = document.getElementById('error');
+
+  try {
+    const data = await API.login(email, password);
+    API.setToken(data.access_token);
+    const user = await API.get('/users/me');
+    localStorage.setItem('user', JSON.stringify(user));
+    window.location.href = '/dashboard';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
 async function handleRegisterSendOTP(e) {
   e.preventDefault();
   const errEl = document.getElementById('error');
