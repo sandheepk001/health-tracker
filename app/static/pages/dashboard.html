@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+
+    .macro-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 1.25rem; }
+    .macro-item { background: var(--surface2); border-radius: var(--radius); padding: 12px; }
+    .macro-name { font-size: 10px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .macro-val { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; }
+    .macro-unit { font-size: 11px; color: var(--text3); }
+    .macro-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
+    .macro-fill { height: 100%; border-radius: 2px; }
+
+    .meal-section { margin-bottom: 1rem; }
+    .meal-title { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
+    .food-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+    .food-item:last-child { border-bottom: none; }
+    .food-name { font-weight: 500; }
+    .food-meta { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2); }
+
+    .calorie-ring { text-align: center; padding: 1rem 0; }
+    .calorie-main { font-family: 'DM Mono', monospace; font-size: 42px; font-weight: 500; line-height: 1; }
+    .calorie-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+    .calorie-sub { font-size: 13px; color: var(--text2); margin-top: 8px; font-family: 'DM Mono', monospace; }
+
+    .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.25rem; }
+    .quick-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; background: var(--surface2); border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; color: var(--text); transition: all 0.15s; font-family: 'Syne', sans-serif; }
+    .quick-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .activity-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1 id="greeting">Good morning</h1>
+      <p id="date-label">Today — loading...</p>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="quick-actions">
+      <a href="/food-log" class="quick-btn">+ Log food</a>
+      <a href="/stats" class="quick-btn">+ Log stats</a>
+    </div>
+
+    <!-- CALORIES -->
+    <div class="card">
+      <div class="card-label">Calories</div>
+      <div class="calorie-ring">
+        <div class="calorie-main" id="cal-total">—</div>
+        <div class="calorie-label">kcal consumed today</div>
+        <div class="calorie-sub" id="cal-tdee"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="macro-row">
+        <div class="macro-item">
+          <div class="macro-name">Protein</div>
+          <div class="macro-val" id="macro-protein">—</div>
+          <div class="metric-unit">g <span id="target-protein" style="font-size:10px;color:var(--text3)"></span></div>
+          <div class="macro-bar"><div class="macro-fill" id="bar-protein" style="background:#378ADD;width:0%"></div></div>
+        </div>
+        <div class="macro-item">
+          <div class="macro-name">Carbs</div>
+          <div class="macro-val" id="macro-carbs">—</div>
+          <div class="metric-unit">g <span id="target-carbs" style="font-size:10px;color:var(--text3)"></span></div>
+          <div class="macro-bar"><div class="macro-fill" id="bar-carbs" style="background:#EF9F27;width:0%"></div></div>
+        </div>
+        <div class="macro-item">
+          <div class="macro-name">Fat</div>
+          <div class="macro-val" id="macro-fat">—</div>
+          <div class="metric-unit">g <span id="target-fat" style="font-size:10px;color:var(--text3)"></span></div>
+          <div class="macro-bar"><div class="macro-fill" id="bar-fat" style="background:#E24B4A;width:0%"></div></div>
+        </div>
+        <div class="macro-item">
+          <div class="macro-name">Fiber</div>
+          <div class="macro-val" id="macro-fiber">—</div>
+          <div class="metric-unit">g <span id="target-fiber" style="font-size:10px;color:var(--text3)"></span></div>
+          <div class="macro-bar"><div class="macro-fill" id="bar-fiber" style="background:#1D9E75;width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+<!-- ACTIVITY -->
+<div class="card">
+  <div class="card-label">Activity today</div>
+  <div class="metrics-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
+    <div class="metric-card">
+      <div class="metric-label">Weight</div>
+      <div class="metric-val" id="act-weight">—</div>
+      <div class="metric-unit">kg</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Walk</div>
+      <div class="metric-val" id="act-walk">—</div>
+      <div class="metric-unit">km</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Gym</div>
+      <div class="metric-val" id="act-gym">—</div>
+      <div class="metric-unit">today</div>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="metrics-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="metric-card">
+      <div class="metric-label">BMR</div>
+      <div class="metric-val" id="act-bmr">—</div>
+      <div class="metric-unit">kcal</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Walk burned</div>
+      <div class="metric-val" id="act-walk-cals">—</div>
+      <div class="metric-unit">kcal</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Gym burned</div>
+      <div class="metric-val" id="act-gym-cals">—</div>
+      <div class="metric-unit">kcal</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">TDEE</div>
+      <div class="metric-val" id="act-tdee">—</div>
+      <div class="metric-unit">kcal</div>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div id="deficit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:14px">
+    <span style="color:var(--text2)">Today's deficit / surplus</span>
+    <span id="act-deficit" style="font-family:'DM Mono',monospace;font-weight:500">—</span>
+  </div>
+  <div id="act-note" style="font-size:12px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace"></div>
+</div>
+  
+  </div>
+
+  <script>
+    renderNav('dashboard');
+
+const todayStr = today();
+const dateObj = new Date();
+const hour = dateObj.getHours();
+const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+document.getElementById('greeting').textContent = greeting + ', ' + (JSON.parse(localStorage.getItem('user') || '{}').name || '');
+document.getElementById('date-label').textContent = dateObj.toLocaleDateString('en-IN', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+});
+
+async function loadDashboard() {
+  // refresh user in localStorage to get latest targets
+  try {
+    const freshUser = await API.get('/users/me');
+    localStorage.setItem('user', JSON.stringify(freshUser));
+  } catch(e) {}
+  try {
+    const summary = await API.get(`/summary/daily/${todayStr}`);
+
+    // calories
+    document.getElementById('cal-total').textContent = Math.round(summary.total_calories);
+
+    // tdee hint — load from profile
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (user.height_cm && user.age) {
+        const bmr = user.gender === 'male'
+          ? 10 * (summary.weight_kg || 70) + 6.25 * user.height_cm - 5 * user.age + 5
+          : 10 * (summary.weight_kg || 60) + 6.25 * user.height_cm - 5 * user.age - 161;
+        document.getElementById('cal-tdee').textContent = `Est. BMR: ${Math.round(bmr)} kcal`;
+      }
+    } catch(e) {}
+
+    // macros
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    document.getElementById('macro-protein').textContent = formatNum(summary.total_protein_g);
+    document.getElementById('macro-carbs').textContent = formatNum(summary.total_carbs_g);
+    document.getElementById('macro-fat').textContent = formatNum(summary.total_fat_g);
+    document.getElementById('macro-fiber').textContent = formatNum(summary.total_fiber_g);
+
+    // show target labels and progress bars
+    const macros = [
+      { key: 'protein', val: summary.total_protein_g, target: user.target_protein, color: '#378ADD' },
+      { key: 'carbs',   val: summary.total_carbs_g,   target: user.target_carbs,   color: '#EF9F27' },
+      { key: 'fat',     val: summary.total_fat_g,      target: user.target_fat,     color: '#E24B4A' },
+      { key: 'fiber',   val: summary.total_fiber_g,    target: user.target_fiber,   color: '#1D9E75' },
+    ];
+
+    macros.forEach(m => {
+      const targetEl = document.getElementById(`target-${m.key}`);
+      const barEl = document.getElementById(`bar-${m.key}`);
+
+      if (m.target) {
+        const pct = Math.min((m.val / m.target) * 100, 100);
+        const over = m.val > m.target;
+        targetEl.textContent = `/ ${m.target}g target`;
+        barEl.style.width = pct + '%';
+        barEl.style.background = over ? '#1D9E75' : m.color;
+      } else {
+        // no target set — fall back to % of calories
+        const total = summary.total_calories || 1;
+        const calMap = { protein: 4, carbs: 4, fat: 9, fiber: 2 };
+        barEl.style.width = Math.min((m.val * calMap[m.key] / total) * 100, 100) + '%';
+        barEl.style.background = m.color;
+        targetEl.textContent = '';
+      }
+    });
+
+    // activity — distinguish not logged vs logged
+    // activity
+if (!summary.stats_logged) {
+  document.getElementById('act-weight').textContent = '—';
+  document.getElementById('act-walk').textContent = '—';
+  document.getElementById('act-gym').textContent = '—';
+  document.getElementById('act-bmr').textContent = '—';
+  document.getElementById('act-walk-cals').textContent = '—';
+  document.getElementById('act-gym-cals').textContent = '—';
+  document.getElementById('act-tdee').textContent = '—';
+  document.getElementById('act-deficit').textContent = '—';
+  document.getElementById('act-note').textContent = 'Log your stats today to see calories burned.';
+} else {
+  document.getElementById('act-weight').textContent = summary.weight_kg != null ? formatNum(summary.weight_kg) : '—';
+  document.getElementById('act-walk').textContent = summary.walk_km != null ? formatNum(summary.walk_km) : '—';
+  document.getElementById('act-gym').textContent = summary.gym_done
+    ? `${summary.gym_mins}min · ${summary.gym_intensity}` : 'Rest day';
+  document.getElementById('act-bmr').textContent = summary.bmr != null ? Math.round(summary.bmr) : '—';
+  document.getElementById('act-walk-cals').textContent = summary.walk_cals != null ? Math.round(summary.walk_cals) : '—';
+  document.getElementById('act-gym-cals').textContent = summary.gym_cals != null ? Math.round(summary.gym_cals) : '—';
+  document.getElementById('act-tdee').textContent = summary.tdee != null ? Math.round(summary.tdee) : '—';
+
+  if (summary.deficit != null) {
+    const defEl = document.getElementById('act-deficit');
+    if (summary.deficit > 0) {
+      defEl.textContent = `−${Math.round(summary.deficit)} kcal deficit`;
+      defEl.style.color = 'var(--accent)';
+    } else {
+      defEl.textContent = `+${Math.round(Math.abs(summary.deficit))} kcal surplus`;
+      defEl.style.color = 'var(--danger)';
+    }
+  }
+  if (summary.is_fasting) {
+    document.getElementById('act-note').textContent = 'Fasting day — 0 kcal intake';
+    document.getElementById('act-note').style.color = 'var(--accent)';
+  } else {
+    document.getElementById('act-note').textContent = summary.steps != null
+      ? `${summary.steps.toLocaleString()} steps logged` : '';
+    document.getElementById('act-note').style.color = 'var(--text3)';
+  }
+}
+
+    
+  } catch(e) {
+    console.error('Dashboard error:', e);
+  }
+}
+
+// reload dashboard every time the tab becomes visible
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') loadDashboard();
+});
+
+loadDashboard();
+  </script>
+</body>
+</html>

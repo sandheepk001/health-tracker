@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem 1rem; }
+    .auth-wrap { width: 100%; max-width: 480px; }
+    .auth-header { margin-bottom: 2rem; }
+    .auth-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .auth-header p { font-size: 13px; color: var(--text2); margin-top: 6px; font-family: 'DM Mono', monospace; }
+    .auth-footer { text-align: center; font-size: 12px; color: var(--text2); margin-top: 1rem; }
+    .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .section-sub {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text3);
+      margin: 1rem 0 0.75rem; padding-top: 1rem;
+      border-top: 0.5px solid var(--border);
+    }
+
+    .otp-input {
+      display: flex; gap: 10px; justify-content: center; margin: 1rem 0;
+    }
+    .otp-input input {
+      width: 44px; height: 52px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500;
+      border: 0.5px solid var(--border2); border-radius: var(--radius);
+      background: var(--surface2); color: var(--text); outline: none;
+      transition: border-color 0.15s;
+    }
+    .otp-input input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(29,158,117,0.12);
+    }
+    .timer {
+      text-align: center; font-size: 12px;
+      color: var(--text3); font-family: 'DM Mono', monospace;
+      margin-bottom: 1rem;
+    }
+    .timer span { color: var(--accent); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-header">
+      <h1>Create account</h1>
+      <p>Set up your health profile</p>
+    </div>
+
+    <div class="card">
+      <div id="error" class="alert alert-danger hidden"></div>
+      <div id="success" class="alert alert-success hidden"></div>
+
+      <!-- FORM FIELDS -->
+      <div id="form-fields">
+        <div class="section-sub">Account</div>
+        <div class="field">
+          <label>Full name</label>
+          <input type="text" id="name" placeholder="Your name" autofocus/>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="email" placeholder="you@example.com"/>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="Min 6 characters"/>
+        </div>
+
+        <div class="section-sub">Body stats</div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Gender</label>
+            <select id="gender">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Age</label>
+            <input type="number" id="age" placeholder="25" min="10" max="100"/>
+          </div>
+        </div>
+        <div class="field">
+          <label>Height (cm)</label>
+          <input type="number" id="height" placeholder="170" min="100" max="250"/>
+        </div>
+      </div>
+
+      <!-- SEND OTP BUTTON -->
+      <button class="btn btn-primary" id="send-otp-btn"
+        onclick="handleRegisterSendOTP(event)">
+        Send OTP to verify email
+      </button>
+
+      <!-- OTP SECTION — hidden until OTP sent -->
+      <div id="otp-section" class="hidden">
+        <div class="section-sub">Verify your email</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:0.75rem">
+          Enter the 6-digit OTP sent to your email.
+        </p>
+        <div class="otp-input">
+          <input type="text" maxlength="1" id="otp-0"
+            oninput="regOtpInput(0)" onkeydown="regOtpKey(event,0)"/>
+          <input type="text" maxlength="1" id="otp-1"
+            oninput="regOtpInput(1)" onkeydown="regOtpKey(event,1)"/>
+          <input type="text" maxlength="1" id="otp-2"
+            oninput="regOtpInput(2)" onkeydown="regOtpKey(event,2)"/>
+          <input type="text" maxlength="1" id="otp-3"
+            oninput="regOtpInput(3)" onkeydown="regOtpKey(event,3)"/>
+          <input type="text" maxlength="1" id="otp-4"
+            oninput="regOtpInput(4)" onkeydown="regOtpKey(event,4)"/>
+          <input type="text" maxlength="1" id="otp-5"
+            oninput="regOtpInput(5)" onkeydown="regOtpKey(event,5)"/>
+        </div>
+        <div class="timer">
+          Expires in <span id="register-timer">10:00</span>
+        </div>
+        <button class="btn btn-primary" onclick="handleRegisterVerifyOTP()">
+          Verify & create account
+        </button>
+        <div style="text-align:center;margin-top:0.75rem">
+          <button id="register-resend-btn" class="btn btn-secondary"
+            style="width:auto;padding:0 1rem"
+            onclick="resendRegisterOTP()" disabled>
+            Resend OTP
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-footer">
+      Already have an account? <a href="/login">Sign in</a>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/auth.js"></script>
+  <script>
+    if (API.getToken()) window.location.href = '/dashboard';
+
+    function regOtpInput(index) {
+      const val = document.getElementById(`otp-${index}`).value;
+      if (val && index < 5) document.getElementById(`otp-${index + 1}`).focus();
+      const otp = [0,1,2,3,4,5].map(i =>
+        document.getElementById(`otp-${i}`).value).join('');
+      if (otp.length === 6) handleRegisterVerifyOTP();
+    }
+
+    function regOtpKey(e, index) {
+      if (e.key === 'Backspace' &&
+          !document.getElementById(`otp-${index}`).value && index > 0) {
+        document.getElementById(`otp-${index - 1}`).focus();
+      }
+    }
+  </script>
+</body>
+</html>

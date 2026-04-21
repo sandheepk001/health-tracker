@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Verify OTP — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .auth-wrap { width: 100%; max-width: 400px; padding: 1rem; }
+    .auth-header { margin-bottom: 2rem; }
+    .auth-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+    .auth-header p { font-size: 13px; color: var(--text2); margin-top: 6px; font-family: 'DM Mono', monospace; }
+    .auth-footer { text-align: center; font-size: 12px; color: var(--text2); margin-top: 1rem; }
+    .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+    .otp-input {
+      display: flex; gap: 10px; justify-content: center; margin: 1.5rem 0;
+    }
+    .otp-input input {
+      width: 44px; height: 52px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500;
+      border: 0.5px solid var(--border2); border-radius: var(--radius);
+      background: var(--surface2); color: var(--text); outline: none;
+      transition: border-color 0.15s;
+    }
+    .otp-input input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(29,158,117,0.12);
+    }
+
+    .timer { text-align: center; font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-bottom: 1rem; }
+    .timer span { color: var(--accent); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-header">
+      <h1>Enter OTP</h1>
+      <p id="email-hint">Sent to your registered email</p>
+    </div>
+
+    <div class="card">
+      <div id="error" class="alert alert-danger hidden"></div>
+      <div id="success" class="alert alert-success hidden"></div>
+
+      <div class="otp-input">
+        <input type="text" maxlength="1" id="otp-0" oninput="otpInput(0)" onkeydown="otpKey(event, 0)"/>
+        <input type="text" maxlength="1" id="otp-1" oninput="otpInput(1)" onkeydown="otpKey(event, 1)"/>
+        <input type="text" maxlength="1" id="otp-2" oninput="otpInput(2)" onkeydown="otpKey(event, 2)"/>
+        <input type="text" maxlength="1" id="otp-3" oninput="otpInput(3)" onkeydown="otpKey(event, 3)"/>
+        <input type="text" maxlength="1" id="otp-4" oninput="otpInput(4)" onkeydown="otpKey(event, 4)"/>
+        <input type="text" maxlength="1" id="otp-5" oninput="otpInput(5)" onkeydown="otpKey(event, 5)"/>
+      </div>
+
+      <div class="timer">Expires in <span id="timer">10:00</span></div>
+
+      <button class="btn btn-primary" onclick="verifyOTP()">Verify OTP</button>
+
+      <div style="text-align:center;margin-top:1rem">
+        <button id="resend-btn" class="btn btn-secondary" style="width:auto;padding:0 1rem"
+          onclick="resendOTP()" disabled>
+          Resend OTP
+        </button>
+      </div>
+    </div>
+
+    <div class="auth-footer">
+      <a href="/login">← Back to login</a>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script>
+    const email = sessionStorage.getItem('reset_email');
+    if (!email) window.location.href = '/forgot-password';
+    document.getElementById('email-hint').textContent = `Sent to ${email}`;
+    document.getElementById('otp-0').focus();
+
+    // OTP input navigation
+    function otpInput(index) {
+      const val = document.getElementById(`otp-${index}`).value;
+      if (val && index < 5) document.getElementById(`otp-${index + 1}`).focus();
+      // auto verify when all 6 filled
+      const otp = getOTP();
+      if (otp.length === 6) verifyOTP();
+    }
+
+    function otpKey(e, index) {
+      if (e.key === 'Backspace' && !document.getElementById(`otp-${index}`).value && index > 0) {
+        document.getElementById(`otp-${index - 1}`).focus();
+      }
+    }
+
+    function getOTP() {
+      return [0,1,2,3,4,5].map(i => document.getElementById(`otp-${i}`).value).join('');
+    }
+
+    function clearOTP() {
+      [0,1,2,3,4,5].forEach(i => document.getElementById(`otp-${i}`).value = '');
+      document.getElementById('otp-0').focus();
+    }
+
+    // countdown timer
+    let seconds = 600;
+    let timerInterval = setInterval(() => {
+      seconds--;
+      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const s = (seconds % 60).toString().padStart(2, '0');
+      document.getElementById('timer').textContent = `${m}:${s}`;
+      if (seconds <= 0) {
+        clearInterval(timerInterval);
+        document.getElementById('timer').textContent = 'Expired';
+        document.getElementById('resend-btn').disabled = false;
+      }
+      // enable resend after 60 seconds
+      if (seconds <= 540) document.getElementById('resend-btn').disabled = false;
+    }, 1000);
+
+    async function verifyOTP() {
+      const otp = getOTP();
+      const errEl = document.getElementById('error');
+      const sucEl = document.getElementById('success');
+      errEl.classList.add('hidden');
+      sucEl.classList.add('hidden');
+
+      if (otp.length < 6) {
+        errEl.textContent = 'Please enter the complete 6-digit OTP.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        await API.post('/auth/verify-otp', { email, otp });
+        sucEl.textContent = 'OTP verified. Redirecting...';
+        sucEl.classList.remove('hidden');
+        clearInterval(timerInterval);
+        setTimeout(() => window.location.href = '/reset-password', 1500);
+      } catch(e) {
+        errEl.textContent = e.message;
+        errEl.classList.remove('hidden');
+        clearOTP();
+      }
+    }
+
+    async function resendOTP() {
+      const errEl = document.getElementById('error');
+      const sucEl = document.getElementById('success');
+      errEl.classList.add('hidden');
+      sucEl.classList.add('hidden');
+
+      try {
+        await API.post('/auth/forgot-password', { email });
+        sucEl.textContent = 'New OTP sent.';
+        sucEl.classList.remove('hidden');
+        clearOTP();
+        // reset timer
+        clearInterval(timerInterval);
+        seconds = 600;
+        document.getElementById('resend-btn').disabled = true;
+        timerInterval = setInterval(() => {
+          seconds--;
+          const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+          const s = (seconds % 60).toString().padStart(2, '0');
+          document.getElementById('timer').textContent = `${m}:${s}`;
+          if (seconds <= 0) {
+            clearInterval(timerInterval);
+            document.getElementById('timer').textContent = 'Expired';
+            document.getElementById('resend-btn').disabled = false;
+          }
+          if (seconds <= 540) document.getElementById('resend-btn').disabled = false;
+        }, 1000);
+      } catch(e) {
+        errEl.textContent = e.message;
+        errEl.classList.remove('hidden');
+      }
+    }
+  </script>
+</body>
+</html>

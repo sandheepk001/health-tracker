@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profile — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+
+    .avatar {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: rgba(29,158,117,0.15);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700; color: var(--accent);
+      font-family: 'DM Mono', monospace;
+    }
+
+    .profile-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .profile-header-left { display: flex; align-items: center; gap: 14px; }
+    .profile-name { font-size: 16px; font-weight: 600; }
+    .profile-email { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+    /* read mode rows */
+    .read-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px;
+    }
+    .read-row:last-child { border-bottom: none; }
+    .read-label { color: var(--text2); }
+    .read-val { font-family: 'DM Mono', monospace; font-weight: 500; }
+
+    .edit-actions { display: flex; gap: 8px; margin-top: 1rem; }
+    .edit-actions .btn { flex: 1; margin-top: 0; }
+
+    /* chart */
+    .chart-wrap { position: relative; height: 240px; width: 100%; margin-bottom: 1rem; }
+
+    .weight-entry {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px;
+    }
+    .weight-entry:last-child { border-bottom: none; }
+    .weight-date { color: var(--text2); font-family: 'DM Mono', monospace; }
+    .weight-val { font-family: 'DM Mono', monospace; font-weight: 500; }
+    .weight-actions { display: flex; align-items: center; gap: 12px; }
+    .trend-up { color: var(--danger); font-size: 11px; }
+    .trend-down { color: var(--accent); font-size: 11px; }
+    .trend-same { color: var(--text3); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header"><h1>Profile</h1></div>
+
+    <div id="alert-area"></div>
+
+    <!-- ACCOUNT CARD -->
+    <div class="card">
+      <div class="profile-header-row">
+        <div class="profile-header-left">
+          <div class="avatar" id="avatar"></div>
+          <div>
+            <div class="profile-name" id="prof-name"></div>
+            <div class="profile-email" id="prof-email"></div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="edit-btn" onclick="enterEditMode()">Edit</button>
+      </div>
+
+      <!-- READ MODE -->
+      <div id="read-mode">
+        <div class="read-row"><span class="read-label">Gender</span><span class="read-val" id="r-gender">—</span></div>
+        <div class="read-row"><span class="read-label">Age</span><span class="read-val" id="r-age">—</span></div>
+        <div class="read-row"><span class="read-label">Height</span><span class="read-val" id="r-height">—</span></div>
+        <div class="read-row"><span class="read-label">Initial weight</span><span class="read-val" id="r-initial-weight">—</span></div>
+        <div class="divider"></div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Daily macro targets</div>
+        <div class="read-row"><span class="read-label">Protein</span><span class="read-val" id="r-target-protein">—</span></div>
+        <div class="read-row"><span class="read-label">Carbs</span><span class="read-val" id="r-target-carbs">—</span></div>
+        <div class="read-row"><span class="read-label">Fat</span><span class="read-val" id="r-target-fat">—</span></div>
+        <div class="read-row"><span class="read-label">Fiber</span><span class="read-val" id="r-target-fiber">—</span></div>
+        <div class="read-row"><span class="read-label">Current weight</span><span class="read-val" id="r-current-weight">—</span></div>
+      </div>
+
+      <!-- EDIT MODE -->
+      <div id="edit-mode" class="hidden">
+        <div class="field">
+          <label>Full name</label>
+          <input type="text" id="e-name"/>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Age</label>
+            <input type="number" id="e-age"/>
+          </div>
+          <div class="field">
+            <label>Height (cm)</label>
+            <input type="number" id="e-height" step="0.1"/>
+          </div>
+        </div>
+        <div class="field">
+          <label>Initial weight (kg)</label>
+          <input type="number" id="e-initial-weight" step="0.1" placeholder="Your starting weight"/>
+        </div>
+        <div class="section-sub" style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin:1rem 0 0.75rem;padding-top:1rem;border-top:0.5px solid var(--border)">
+          Daily macro targets
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+          These are soft targets — tracking continues beyond them.
+        </p>
+        <div class="grid-2">
+          <div class="field">
+            <label>Protein target (g)</label>
+            <input type="number" id="e-target-protein" step="0.1" placeholder="e.g. 150"/>
+          </div>
+          <div class="field">
+            <label>Carbs target (g)</label>
+            <input type="number" id="e-target-carbs" step="0.1" placeholder="e.g. 200"/>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Fat target (g)</label>
+            <input type="number" id="e-target-fat" step="0.1" placeholder="e.g. 60"/>
+          </div>
+          <div class="field">
+            <label>Fiber target (g)</label>
+            <input type="number" id="e-target-fiber" step="0.1" placeholder="e.g. 30"/>
+          </div>
+        </div>
+        <div class="field">
+          <label>Current weight (kg)</label>
+          <input type="number" id="e-current-weight" step="0.1" readonly
+            style="opacity:0.6;cursor:not-allowed"
+            title="Updated automatically from Stats tab"/>
+          <span style="font-size:11px;color:var(--text3);margin-top:3px">
+            Auto-updated from your latest stats entry
+          </span>
+        </div>
+        <div class="edit-actions">
+          <button class="btn btn-primary" onclick="saveProfile()">Save changes</button>
+          <button class="btn btn-secondary" onclick="exitEditMode()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- WEIGHT HISTORY GRAPH -->
+    <div class="card">
+      <div class="card-label">Weight history</div>
+<div style="display:flex;gap:16px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);margin-bottom:1rem">
+  <span style="display:flex;align-items:center;gap:6px">
+    <span style="width:10px;height:10px;border-radius:50%;background:#1D9E75;display:inline-block"></span>Logged
+  </span>
+  <span style="display:flex;align-items:center;gap:6px">
+    <span style="width:10px;height:10px;border-radius:50%;background:#EF9F27;display:inline-block"></span>Initial weight
+  </span>
+</div>
+      <div id="no-weight-msg" style="font-size:13px;color:var(--text3);display:none;padding:0.5rem 0">
+        No weight entries yet. Log your weight in the Stats tab.
+      </div>
+      <div id="weight-graph-area">
+        <div class="chart-wrap">
+          <canvas id="weight-chart" role="img" aria-label="Line chart of weight over time"></canvas>
+        </div>
+        <div class="metrics-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
+          <div class="metric-card">
+            <div class="metric-label">Starting</div>
+            <div class="metric-val" id="wh-start">—</div>
+            <div class="metric-unit">kg</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Current</div>
+            <div class="metric-val" id="wh-current">—</div>
+            <div class="metric-unit">kg</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total change</div>
+            <div class="metric-val" id="wh-change">—</div>
+            <div class="metric-unit">kg</div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--text3);margin:0.75rem 0">
+          All entries
+        </div>
+        <div id="weight-list"></div>
+      </div>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div class="card" style="border-color:rgba(226,75,74,0.3)">
+      <div class="card-label" style="color:var(--danger)">Danger zone</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:1rem">Sign out of your account on this device.</p>
+      <button class="btn btn-danger" onclick="logout()" style="width:100%">Sign out</button>
+    </div>
+  </div>
+
+  <script>
+    renderNav('profile');
+    let chartInstance = null;
+    let currentUser = null;
+    let currentWeight = null;
+
+    // ── read / edit mode ──────────────────────────────────────────
+    function enterEditMode() {
+      document.getElementById('read-mode').classList.add('hidden');
+      document.getElementById('edit-mode').classList.remove('hidden');
+      document.getElementById('edit-btn').classList.add('hidden');
+
+      document.getElementById('e-name').value = currentUser.name || '';
+      document.getElementById('e-age').value = currentUser.age || '';
+      document.getElementById('e-height').value = currentUser.height_cm || '';
+      document.getElementById('e-initial-weight').value = currentUser.initial_weight || '';
+      document.getElementById('e-current-weight').value = currentWeight != null ? currentWeight : '';
+      document.getElementById('e-target-protein').value = currentUser.target_protein || '';
+      document.getElementById('e-target-carbs').value = currentUser.target_carbs || '';
+      document.getElementById('e-target-fat').value = currentUser.target_fat || '';
+      document.getElementById('e-target-fiber').value = currentUser.target_fiber || '';
+    }
+
+    function exitEditMode() {
+      document.getElementById('edit-mode').classList.add('hidden');
+      document.getElementById('read-mode').classList.remove('hidden');
+      document.getElementById('edit-btn').classList.remove('hidden');
+    }
+
+    // ── load profile ──────────────────────────────────────────────
+    async function loadProfile() {
+      try {
+        const user = await API.get('/users/me');
+        currentUser = user;
+        localStorage.setItem('user', JSON.stringify(user));
+
+        document.getElementById('avatar').textContent = user.name.slice(0,2).toUpperCase();
+        document.getElementById('prof-name').textContent = user.name;
+        document.getElementById('prof-email').textContent = user.email;
+        document.getElementById('r-target-protein').textContent = user.target_protein ? user.target_protein + ' g' : '—';
+        document.getElementById('r-target-carbs').textContent = user.target_carbs ? user.target_carbs + ' g' : '—';
+        document.getElementById('r-target-fat').textContent = user.target_fat ? user.target_fat + ' g' : '—';
+        document.getElementById('r-target-fiber').textContent = user.target_fiber ? user.target_fiber + ' g' : '—';
+        document.getElementById('r-gender').textContent = user.gender;
+        document.getElementById('r-age').textContent = user.age + ' years';
+        document.getElementById('r-height').textContent = user.height_cm + ' cm';
+        document.getElementById('r-initial-weight').textContent =
+          user.initial_weight ? user.initial_weight + ' kg' : '—';
+      } catch(e) {}
+    }
+
+    // ── load weight history ───────────────────────────────────────
+async function loadWeightHistory() {
+  try {
+    const data = await API.get('/stats/weight/history');
+    const user = await API.get('/users/me');
+    currentUser = user;
+
+    // prepend initial weight as first point if set and earlier than first stat entry
+    let chartData = [...data];
+    if (user.initial_weight) {
+      const firstStatDate = data.length ? data[0].date : null;
+      const initEntry = {
+        id: null,
+        date: firstStatDate
+          ? new Date(new Date(firstStatDate).getTime() - 86400000 * 7).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        weight_kg: user.initial_weight,
+        isInitial: true
+      };
+      // only prepend if it comes before the first real entry
+      if (!firstStatDate || initEntry.date < firstStatDate) {
+        chartData = [initEntry, ...chartData];
+      }
+    }
+
+    if (!chartData.length) {
+      document.getElementById('no-weight-msg').style.display = 'block';
+      document.getElementById('weight-graph-area').style.display = 'none';
+      document.getElementById('r-current-weight').textContent = '—';
+      currentWeight = null;
+      return;
+    }
+
+    document.getElementById('no-weight-msg').style.display = 'none';
+    document.getElementById('weight-graph-area').style.display = 'block';
+
+    const startW = chartData[0].weight_kg;
+    const latestW = data.length ? data[data.length - 1].weight_kg : user.initial_weight;
+    const change = +(latestW - startW).toFixed(2);
+    currentWeight = latestW;
+
+    document.getElementById('r-current-weight').textContent = latestW + ' kg';
+    document.getElementById('wh-start').textContent = startW + (chartData[0].isInitial ? '' : '');
+    document.getElementById('wh-current').textContent = latestW;
+
+    const changeEl = document.getElementById('wh-change');
+    changeEl.textContent = (change > 0 ? '+' : '') + change;
+    changeEl.style.color = change < 0 ? 'var(--accent)' : change > 0 ? 'var(--danger)' : 'var(--text)';
+
+    renderChart(chartData);
+    renderList(data); // list still shows only real stat entries (deletable)
+  } catch(e) { console.error(e); }
+}
+
+    function renderChart(data) {
+  const labels = data.map(d => d.isInitial ? d.date + ' (initial)' : d.date);
+  const weights = data.map(d => d.weight_kg);
+  const pointColors = data.map(d => d.isInitial ? '#EF9F27' : '#1D9E75');
+  const pointRadius = data.map(d => d.isInitial ? 7 : 5);
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tickColor = isDark ? '#6b6a66' : '#9e9d99';
+
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(document.getElementById('weight-chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Weight (kg)',
+        data: weights,
+        borderColor: '#1D9E75',
+        backgroundColor: 'rgba(29,158,117,0.07)',
+        borderWidth: 2.5,
+        pointBackgroundColor: pointColors,
+        pointRadius: pointRadius,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.35
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: isDark ? '#1c1c1a' : '#fff',
+          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          borderWidth: 1,
+          titleColor: isDark ? '#f0ede8' : '#1a1a18',
+          bodyColor: isDark ? '#9e9d99' : '#6b6a66',
+          padding: 10,
+          callbacks: {
+            label: ctx => {
+              const d = data[ctx.dataIndex];
+              return d.isInitial
+                ? ` ${ctx.parsed.y.toFixed(2)} kg (initial weight)`
+                : ` ${ctx.parsed.y.toFixed(2)} kg`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, maxTicksLimit: 10 }
+        },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, callback: v => v.toFixed(1) + ' kg' }
+        }
+      }
+    }
+  });
+}
+
+    function renderList(data) {
+      const reversed = [...data].reverse();
+      document.getElementById('weight-list').innerHTML = reversed.map((entry, i) => {
+        const prev = reversed[i + 1];
+        let trendHTML = '';
+        if (prev) {
+          const diff = +(entry.weight_kg - prev.weight_kg).toFixed(2);
+          if (diff < 0) trendHTML = `<span class="trend-down">▼ ${Math.abs(diff)} kg</span>`;
+          else if (diff > 0) trendHTML = `<span class="trend-up">▲ ${diff} kg</span>`;
+          else trendHTML = `<span class="trend-same">— no change</span>`;
+        }
+        return `<div class="weight-entry">
+          <div class="weight-date">${entry.date}</div>
+          <div class="weight-actions">
+            ${trendHTML}
+            <div class="weight-val">${entry.weight_kg} kg</div>
+            <button class="btn btn-danger btn-sm" onclick="removeWeight(${entry.id}, '${entry.date}')">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function removeWeight(id, date) {
+      if (!confirm(`Remove weight entry for ${date}?\nWalk and gym data for that day will be kept.`)) return;
+      try {
+        await API.delete(`/stats/weight/${id}`);
+        await loadWeightHistory();
+        document.getElementById('alert-area').innerHTML =
+          '<div class="alert alert-success">Weight entry removed.</div>';
+        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function saveProfile() {
+      const alertEl = document.getElementById('alert-area');
+      try {
+        await API.put('/users/me', {
+          name: document.getElementById('e-name').value,
+          age: parseInt(document.getElementById('e-age').value),
+          height_cm: parseFloat(document.getElementById('e-height').value),
+          initial_weight: parseFloat(document.getElementById('e-initial-weight').value) || null,
+          target_protein: parseFloat(document.getElementById('e-target-protein').value) || null,
+          target_carbs: parseFloat(document.getElementById('e-target-carbs').value) || null,
+          target_fat: parseFloat(document.getElementById('e-target-fat').value) || null,
+          target_fiber: parseFloat(document.getElementById('e-target-fiber').value) || null,
+        });
+        exitEditMode();
+        alertEl.innerHTML = '<div class="alert alert-success">Profile updated.</div>';
+        setTimeout(() => alertEl.innerHTML = '', 3000);
+        await loadProfile();
+      } catch(e) {
+        alertEl.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        loadProfile();
+        loadWeightHistory();
+      }
+    });
+
+    loadProfile();
+    loadWeightHistory();
+  </script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .auth-wrap { width: 100%; max-width: 400px; padding: 1rem; }
+    .auth-header { margin-bottom: 2rem; }
+    .auth-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .auth-header p { font-size: 13px; color: var(--text2); margin-top: 6px; font-family: 'DM Mono', monospace; }
+    .auth-footer { text-align: center; font-size: 12px; color: var(--text2); margin-top: 1rem; }
+    .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-header">
+      <h1>Health Tracker</h1>
+      <p>Sign in to your account</p>
+    </div>
+
+    <div class="card">
+      <div id="error" class="alert alert-danger hidden"></div>
+      <div id="success" class="alert alert-success hidden"></div>
+
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="you@example.com" autofocus/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter') handleLogin(event)"/>
+      </div>
+      <button class="btn btn-primary" onclick="handleLogin(event)">Sign in</button>
+    </div>
+
+    <div class="auth-footer" style="display:flex;justify-content:space-between">
+      <a href="/forgot-password">Forgot password?</a>
+      <a href="/register">Register</a>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/auth.js"></script>
+  <script>
+    // redirect if already logged in
+    if (API.getToken()) window.location.href = '/dashboard';
+
+    // show success message if coming from register
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('registered')) {
+      const el = document.getElementById('success');
+      el.textContent = 'Account created successfully. Please sign in.';
+      el.classList.remove('hidden');
+    }
+    if (params.get('registered')) {
+      const el = document.getElementById('success');
+      el.textContent = 'Account created successfully. Please sign in.';
+      el.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

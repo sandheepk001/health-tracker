@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Food Log — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+    .section-sub { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin: 1rem 0 0.75rem; padding-top: 1rem; border-top: 0.5px solid var(--border); }
+
+    .search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .search-row input { flex: 1; height: 38px; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 13px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--surface2); color: var(--text); outline: none; }
+    .search-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29,158,117,0.12); }
+
+    .search-results { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+    .search-result-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; transition: background 0.1s; font-size: 13px; border-bottom: 0.5px solid var(--border); }
+    .search-result-item:last-child { border-bottom: none; }
+    .search-result-item:hover { background: var(--surface2); }
+    .result-name { font-weight: 500; }
+    .result-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .result-cal { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); }
+
+    .selected-food { background: var(--surface2); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .selected-name { font-weight: 600; font-size: 14px; }
+    .selected-meta { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+    .meal-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+    .meal-tab { height: 32px; padding: 0 14px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; border: 0.5px solid var(--border2); border-radius: var(--radius); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+    .meal-tab.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+    .food-entry { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+    .food-entry:last-child { border-bottom: none; }
+    .food-entry-name { font-size: 13px; font-weight: 500; }
+    .food-entry-meta { font-size: 11px; color: var(--text2); font-family: 'DM Mono', monospace; margin-top: 2px; }
+    .food-entry-right { display: flex; align-items: center; gap: 12px; }
+    .food-entry-cal { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent); }
+
+    .add-food-form { background: var(--surface2); border-radius: var(--radius); padding: 14px; margin-top: 10px; }
+    .add-food-title { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text2); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Food log</h1>
+      <p id="date-label"></p>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <!-- LOG FOOD -->
+    <div class="card">
+      <div class="card-label">Add food</div>
+
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="log-date" onchange="loadTodayLog()"/>
+      </div>
+
+      <div class="field" style="margin-bottom:8px">
+        <label>Meal</label>
+        <div class="meal-tabs">
+          <button class="meal-tab active" id="tab-breakfast" onclick="setMeal('breakfast')">Breakfast</button>
+          <button class="meal-tab" id="tab-lunch" onclick="setMeal('lunch')">Lunch</button>
+          <button class="meal-tab" id="tab-dinner" onclick="setMeal('dinner')">Dinner</button>
+          <button class="meal-tab" id="tab-snack" onclick="setMeal('snack')">Snack</button>
+          <button class="meal-tab" id="tab-fasting" onclick="setFasting()"
+            style="border-color:rgba(29,158,117,0.4);color:var(--accent)">
+            Fasting
+          </button>
+        </div>
+      </div>
+
+      <!-- fasting confirmation panel -->
+      <div id="fasting-panel" class="hidden">
+        <div style="background:rgba(29,158,117,0.08);border:0.5px solid rgba(29,158,117,0.3);border-radius:var(--radius);padding:14px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px">Fasting day</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+            This will log today as a fasting day with 0 kcal intake.
+            Any existing food entries for this date will be ignored in summaries.
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-accent btn-sm" onclick="saveFasting()" style="flex:1">Confirm fasting</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelFasting()" style="flex:1">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEARCH -->
+      <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:5px">Search food</label>
+      <div class="search-row">
+        <input type="text" id="food-search" placeholder="Type to search (e.g. rice, egg...)" oninput="searchFood()"/>
+        <button class="btn btn-secondary btn-sm" onclick="clearSearch()">Clear</button>
+      </div>
+      <div id="search-results" class="hidden"></div>
+
+      <!-- SELECTED FOOD -->
+      <div id="selected-food" class="hidden">
+        <div class="selected-food">
+          <div>
+            <div class="selected-name" id="sel-name"></div>
+            <div class="selected-meta" id="sel-meta"></div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="clearSelected()">Change</button>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label id="quantity-label">Quantity</label>
+            <input type="number" id="quantity" placeholder="100" min="1" oninput="previewMacros()"/>
+          </div>
+          <div class="field">
+            <label>Preview</label>
+            <input type="text" id="macro-preview" readonly style="background:var(--surface2);color:var(--text2)"/>
+          </div>
+        </div>
+        <button class="btn btn-accent" onclick="logFood()" style="width:100%">Add to log</button>
+      </div>
+
+      <!-- ADD NEW FOOD -->
+      <div id="add-new-toggle" class="hidden">
+        <button class="btn btn-secondary btn-sm" onclick="toggleAddNew()" style="width:100%;margin-top:8px">
+          + Add "<span id="search-term-label"></span>" to food database
+        </button>
+      </div>
+
+      <div id="add-new-form" class="add-food-form hidden">
+        <div class="add-food-title">New food entry</div>
+        <div class="grid-2">
+          <div class="field"><label>Food name</label><input type="text" id="new-name"/></div>
+          <div class="field">
+            <label>Unit</label>
+            <select id="new-unit">
+              <option value="g">g (grams)</option>
+              <option value="ml">ml (millilitres)</option>
+              <option value="piece">piece</option>
+              <option value="cup">cup</option>
+              <option value="tbsp">tbsp</option>
+              <option value="tsp">tsp</option>
+              <option value="scoop">scoop</option>
+            </select>
+          </div>
+        </div>
+        <p id="unit-hint" style="font-size:11px;color:var(--text3);margin-bottom:10px">
+          Enter macros per 100 of your chosen unit (per 100g, per 100ml, etc.)
+        </p>
+        <div class="grid-2">
+          <div class="field"><label>Calories / 100g</label><input type="number" id="new-cal" step="0.1"/></div>
+          <div class="field"><label>Protein / 100g</label><input type="number" id="new-protein" step="0.1"/></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Carbs / 100g</label><input type="number" id="new-carbs" step="0.1"/></div>
+          <div class="field"><label>Fat / 100g</label><input type="number" id="new-fat" step="0.1"/></div>
+        </div>
+        <div class="field"><label>Fiber / 100g</label><input type="number" id="new-fiber" step="0.1"/></div>
+        <button class="btn btn-primary" onclick="addNewFood()">Save to database & select</button>
+      </div>
+    </div>
+
+    <!-- TODAY'S LOG -->
+    <div class="card">
+      <div class="card-label">Today's entries</div>
+      <div id="todays-log">
+        <div style="font-size:13px;color:var(--text3)">No entries yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    renderNav('food-log');
+
+    let selectedFood = null;
+    let selectedMeal = 'breakfast';
+    let searchTimer = null;
+
+    document.getElementById('log-date').value = today();
+    document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    function setMeal(meal) {
+      isFasting = false;
+      selectedMeal = meal;
+      document.getElementById('fasting-panel').classList.add('hidden');
+      document.querySelectorAll('.meal-tab').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + meal).classList.add('active');
+    }
+    let isFasting = false;
+
+    function setFasting() {
+      // deactivate all meal tabs
+      document.querySelectorAll('.meal-tab').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-fasting').classList.add('active');
+
+      // hide food search, show fasting panel
+      document.getElementById('fasting-panel').classList.remove('hidden');
+      document.getElementById('selected-food').classList.add('hidden');
+      document.getElementById('search-results').classList.add('hidden');
+      document.getElementById('add-new-toggle').classList.add('hidden');
+      document.getElementById('food-search').value = '';
+      isFasting = true;
+    }
+
+    function cancelFasting() {
+      isFasting = false;
+      document.getElementById('fasting-panel').classList.add('hidden');
+      // reactivate breakfast tab
+      document.querySelectorAll('.meal-tab').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-breakfast').classList.add('active');
+      selectedMeal = 'breakfast';
+    }
+
+    async function saveFasting() {
+      const date = document.getElementById('log-date').value;
+      const alertEl = document.getElementById('alert-area');
+      try {
+        await API.post('/stats/log', {
+          date: date,
+          is_fasting: true
+        });
+        document.getElementById('fasting-panel').classList.add('hidden');
+        alertEl.innerHTML = '<div class="alert alert-success">Fasting day logged for ' + date + '.</div>';
+        setTimeout(() => alertEl.innerHTML = '', 4000);
+        loadTodayLog();
+        isFasting = false;
+      } catch(e) {
+        alertEl.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+}
+    function searchFood() {
+      clearTimeout(searchTimer);
+      const q = document.getElementById('food-search').value.trim();
+      if (q.length < 2) {
+        document.getElementById('search-results').classList.add('hidden');
+        document.getElementById('add-new-toggle').classList.add('hidden');
+        return;
+      }
+      searchTimer = setTimeout(async () => {
+        try {
+          const results = await API.get(`/foods/search?q=${encodeURIComponent(q)}`);
+          const el = document.getElementById('search-results');
+          if (results.length === 0) {
+            el.classList.add('hidden');
+            document.getElementById('search-term-label').textContent = q;
+            document.getElementById('add-new-toggle').classList.remove('hidden');
+            return;
+          }
+          el.innerHTML = results.map(f => `
+            <div class="search-result-item" data-food='${JSON.stringify(f).replace(/'/g, "&#39;")}'>
+              <div>
+                <div class="result-name">${f.name}</div>
+                <div class="result-meta">per 100${f.unit || 'g'} · P:${f.protein_per_100g}g · C:${f.carbs_per_100g}g · F:${f.fat_per_100g}g</div>
+              </div>
+              <div class="result-cal">${f.calories_per_100g} kcal</div>
+            </div>`).join('');
+
+          // attach click handlers after rendering
+          el.querySelectorAll('.search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+              const f = JSON.parse(item.dataset.food.replace(/&#39;/g, "'"));
+              selectFood(f.id, f.name, f.unit || 'g', f.calories_per_100g, f.protein_per_100g, f.carbs_per_100g, f.fat_per_100g, f.fiber_per_100g);
+            });
+          });
+          el.classList.remove('hidden');
+          document.getElementById('search-term-label').textContent = q;
+          document.getElementById('add-new-toggle').classList.remove('hidden');
+        } catch(e) {}
+      }, 300);
+    }
+
+    function selectFood(id, name, unit, cal, protein, carbs, fat, fiber) {
+      selectedFood = { id, name, unit, cal, protein, carbs, fat, fiber };
+      document.getElementById('sel-name').textContent = name;
+      document.getElementById('sel-meta').textContent =
+        `${cal} kcal · P:${protein}g · C:${carbs}g · F:${fat}g per 100${unit}`;
+      document.getElementById('selected-food').classList.remove('hidden');
+      document.getElementById('search-results').classList.add('hidden');
+      document.getElementById('add-new-toggle').classList.add('hidden');
+      document.getElementById('food-search').value = '';
+      // update quantity label to show correct unit
+      document.querySelector('label[for="quantity"]') &&
+        (document.querySelector('label[for="quantity"]').textContent = `Quantity (${unit})`);
+      document.getElementById('quantity').placeholder = `e.g. 250`;
+      document.getElementById('quantity').value = '100';
+      document.getElementById('quantity-label').textContent = `Quantity (${unit})`;
+      previewMacros();
+    }
+
+    function previewMacros() {
+      if (!selectedFood) return;
+      const q = parseFloat(document.getElementById('quantity').value) || 0;
+      const r = q / 100;
+      document.getElementById('macro-preview').value =
+        `${Math.round(selectedFood.cal * r)} kcal · P:${(selectedFood.protein*r).toFixed(1)}g`;
+    }
+
+    function clearSearch() {
+      document.getElementById('food-search').value = '';
+      document.getElementById('search-results').classList.add('hidden');
+      document.getElementById('add-new-toggle').classList.add('hidden');
+    }
+
+    function clearSelected() {
+      selectedFood = null;
+      document.getElementById('selected-food').classList.add('hidden');
+      document.getElementById('food-search').value = '';
+      document.getElementById('food-search').focus();
+    }
+
+    function toggleAddNew() {
+      document.getElementById('add-new-form').classList.toggle('hidden');
+      document.getElementById('new-name').value = document.getElementById('food-search').value;
+    }
+
+    async function addNewFood() {
+      const unit = document.getElementById('new-unit').value;
+      const payload = {
+        name: document.getElementById('new-name').value,
+        unit: unit,
+        calories_per_100g: parseFloat(document.getElementById('new-cal').value) || 0,
+        protein_per_100g: parseFloat(document.getElementById('new-protein').value) || 0,
+        carbs_per_100g: parseFloat(document.getElementById('new-carbs').value) || 0,
+        fat_per_100g: parseFloat(document.getElementById('new-fat').value) || 0,
+        fiber_per_100g: parseFloat(document.getElementById('new-fiber').value) || 0,
+      };
+      try {
+        const food = await API.post('/foods', payload);
+        document.getElementById('add-new-form').classList.add('hidden');
+        document.getElementById('add-new-toggle').classList.add('hidden');
+        selectFood(food.id, food.name, food.unit, food.calories_per_100g, food.protein_per_100g, food.carbs_per_100g, food.fat_per_100g, food.fiber_per_100g);
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function logFood() {
+      if (!selectedFood) return;
+      const q = parseFloat(document.getElementById('quantity').value);
+      if (!q) { alert('Enter quantity'); return; }
+      try {
+        await API.post('/food-log', {
+          food_id: selectedFood.id,
+          date: document.getElementById('log-date').value,
+          meal_type: selectedMeal,
+          quantity: q,
+          unit: selectedFood.unit
+        });
+        clearSelected();
+        clearSearch();
+        loadTodayLog();
+        document.getElementById('alert-area').innerHTML =
+          '<div class="alert alert-success">Food logged successfully.</div>';
+        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function deleteLog(id) {
+      try {
+        await API.delete(`/food-log/${id}`);
+        loadTodayLog();
+      } catch(e) {}
+    }
+
+    async function loadTodayLog() {
+      const date = document.getElementById('log-date').value;
+      try {
+        // check if fasting
+        const summary = await API.get(`/summary/daily/${date}`).catch(() => null);
+        if (summary?.is_fasting) {
+          document.getElementById('todays-log').innerHTML = `
+            <div style="background:rgba(29,158,117,0.08);border:0.5px solid rgba(29,158,117,0.3);
+              border-radius:var(--radius);padding:14px;font-size:13px;color:var(--accent)">
+              Fasting day — 0 kcal logged.
+              <button class="btn btn-secondary btn-sm" style="margin-left:12px"
+                onclick="clearFasting('${date}')">Clear fasting</button>
+            </div>`;
+          return;
+        }
+
+        const logs = await API.get(`/food-log/${date}`);
+        const el = document.getElementById('todays-log');
+        if (!logs.length) {
+          el.innerHTML = '<div style="font-size:13px;color:var(--text3)">No entries yet.</div>';
+          return;
+        }
+        const meals = { breakfast: [], lunch: [], dinner: [], snack: [] };
+        logs.forEach(l => meals[l.meal_type]?.push(l));
+        let html = '';
+        let totalCal = 0;
+        for (const [meal, items] of Object.entries(meals)) {
+          if (!items.length) continue;
+          html += `<div style="margin-bottom:1rem"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);margin-bottom:6px">${meal}</div>`;
+          items.forEach(item => {
+            totalCal += item.calories;
+            html += `<div class="food-entry">
+              <div>
+                <div class="food-entry-name" id="log-fname-${item.id}">${item.food_id}</div>
+                <div class="food-entry-meta">${item.quantity}${item.unit} · P:${formatNum(item.protein_g)}g C:${formatNum(item.carbs_g)}g F:${formatNum(item.fat_g)}g</div>
+                </div>
+              <div class="food-entry-right">
+                <div class="food-entry-cal">${Math.round(item.calories)} kcal</div>
+                <button class="btn btn-danger btn-sm" onclick="deleteLog(${item.id})">✕</button>
+              </div>
+            </div>`;
+          });
+          html += '</div>';
+        }
+        html += `<div class="divider"></div><div class="summary-row"><span>Total</span><span>${Math.round(totalCal)} kcal</span></div>`;
+        el.innerHTML = html;
+
+        // resolve food names
+        logs.forEach(async item => {
+          try {
+            const food = await API.get(`/foods/${item.food_id}`);
+            const el = document.getElementById(`log-fname-${item.id}`);
+            if (el) el.textContent = food.name;
+          } catch(e) {}
+        });
+      } catch(e) {}
+    }
+    async function clearFasting(date) {
+      try {
+        await API.post('/stats/log', { date: date, is_fasting: false });
+        loadTodayLog();
+      } catch(e) {}
+    }
+    loadTodayLog();
+  </script>
+</body>
+</html>

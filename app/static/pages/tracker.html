@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tracker — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+    .section-sub { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin: 1rem 0 0.75rem; padding-top: 1rem; border-top: 0.5px solid var(--border); }
+    .toggle { margin-top: 2px; }
+    .week-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--surface2); border-radius: var(--radius); margin-bottom: 0.75rem; }
+    .week-label { font-size: 12px; font-weight: 700; color: var(--text2); white-space: nowrap; min-width: 60px; }
+    .week-row input { flex: 1; height: 38px; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 13px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--surface); color: var(--text); outline: none; }
+    .week-row input:focus { border-color: var(--accent); }
+    .chart-wrap { position: relative; width: 100%; height: 260px; margin-bottom: 0.5rem; }
+    .thermo-note { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; margin-bottom: 8px; }
+    .download-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 1rem; }
+    .btn-download { background: transparent; color: var(--text2); border: 0.5px solid var(--border2); font-size: 12px; height: 34px; padding: 0 14px; border-radius: var(--radius); cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 600; }
+    .btn-download:hover { background: var(--surface2); }
+    .deficit-pos { color: #e24b4a; }
+    .deficit-neg { color: var(--accent); }
+    .bmi-tag { font-size: 10px; color: var(--text3); margin-left: 4px; }
+    .badge { font-size: 9px; padding: 2px 5px; border-radius: 4px; background: var(--warn-bg); color: var(--warn-text); border: 0.5px solid var(--warn-border); margin-left: 4px; }
+    .step-dot { width: 24px; height: 4px; border-radius: 2px; background: var(--border2); transition: background 0.3s; display: inline-block; margin-right: 4px; }
+    .step-dot.active { background: var(--accent); }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Weight loss tracker</h1>
+      <p>Mifflin-St Jeor · deficit-ratio thermogenesis · weekly log</p>
+      <div style="margin-top:12px">
+        <span class="step-dot active" id="dot-1"></span>
+        <span class="step-dot" id="dot-2"></span>
+        <span class="step-dot" id="dot-3"></span>
+      </div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="card" id="card-inputs">
+      <div class="card-label">Step 1 — Your details</div>
+      <div id="prefill-note" class="alert alert-success hidden">Profile loaded from your account.</div>
+
+      <div class="grid-2">
+        <div class="field"><label>Gender</label>
+          <select id="gender"><option value="male">Male</option><option value="female">Female</option></select>
+        </div>
+        <div class="field"><label>Age</label><input type="number" id="age" placeholder="25"/></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Weight (kg)</label><input type="number" id="weight" placeholder="70" step="0.1"/></div>
+        <div class="field"><label>Height (cm)</label><input type="number" id="height" placeholder="170"/></div>
+      </div>
+      <div class="field"><label>Target weeks</label><input type="number" id="weeks" placeholder="12" min="1" max="52"/></div>
+
+      <div class="section-sub">Daily walking</div>
+      <div class="field"><label>Input type</label>
+        <div class="toggle">
+          <button class="active" id="btn-km" onclick="setWalkMode('km')">Distance (km)</button>
+          <button id="btn-steps" onclick="setWalkMode('steps')">Steps</button>
+        </div>
+      </div>
+      <div class="field" id="field-km"><label>Daily distance (km)</label><input type="number" id="walk-km" placeholder="15" step="0.1"/></div>
+      <div class="field hidden" id="field-steps"><label>Daily steps</label><input type="number" id="walk-steps" placeholder="20000"/></div>
+
+      <div class="section-sub">Gym workout</div>
+      <div class="field"><label>Do you work out?</label>
+        <div class="toggle">
+          <button class="active" id="btn-gym-no" onclick="setGymMode(false)">No</button>
+          <button id="btn-gym-yes" onclick="setGymMode(true)">Yes</button>
+        </div>
+      </div>
+      <div id="gym-fields" class="hidden">
+        <div class="grid-3">
+          <div class="field"><label>Days/week</label><input type="number" id="gym-days" placeholder="4" min="1" max="7"/></div>
+          <div class="field"><label>Duration (mins)</label><input type="number" id="gym-mins" placeholder="60"/></div>
+          <div class="field"><label>Intensity</label>
+            <select id="gym-intensity">
+              <option value="3.0">Light</option>
+              <option value="5.0" selected>Moderate</option>
+              <option value="8.0">Intense</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="startTracker()">Calculate baseline →</button>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="card hidden" id="card-baseline">
+      <div class="card-label">Step 2 — Week 0 baseline</div>
+      <div id="baseline-metrics" style="margin-bottom:1rem"></div>
+      <div id="baseline-extra"></div>
+      <button class="btn btn-primary" id="btn-start-weekly" onclick="showWeeklyStep()">Start weekly log →</button>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="card hidden" id="card-weekly">
+      <div class="card-label">Step 3 — Weekly log</div>
+      <div id="week-prompt-area"></div>
+      <div id="week-warn-area"></div>
+    </div>
+
+    <!-- CHART -->
+    <div class="card hidden" id="card-chart">
+      <div class="card-label">Weight over time</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:1rem;font-family:'DM Mono',monospace">
+        <div style="width:10px;height:10px;border-radius:2px;background:var(--accent)"></div>Weight (kg) · deficit-ratio thermogenesis
+      </div>
+      <div class="chart-wrap"><canvas id="wlt-chart" role="img" aria-label="Weight loss chart"></canvas></div>
+      <div id="chart-summary" style="margin-top:1rem"></div>
+      <div class="download-row">
+        <button class="btn-download" onclick="downloadChart()">↓ Chart</button>
+        <button class="btn-download" onclick="downloadTable()">↓ Table</button>
+        <button class="btn-download" onclick="downloadCombined()">↓ Combined report</button>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="card hidden" id="card-table">
+      <div class="card-label">Week-by-week breakdown</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Week</th><th>Weight (kg)</th><th>BMI</th><th>TDEE</th>
+            <th>Eff. TDEE</th><th>Thermo</th><th>Calories in</th><th>Deficit</th><th>Lost (kg)</th>
+          </tr></thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:1rem" onclick="resetAll()">↺ Start over</button>
+    </div>
+  </div>
+
+  <script>
+    renderNav('tracker');
+
+    let walkMode = 'km', gymEnabled = false;
+    let state = {}, weeklyData = [], chartInstance = null;
+
+    // prefill from profile
+    async function prefillFromProfile() {
+      try {
+        const user = await API.get('/users/me');
+        document.getElementById('gender').value = user.gender;
+        document.getElementById('age').value = user.age;
+        document.getElementById('height').value = user.height_cm;
+        document.getElementById('prefill-note').classList.remove('hidden');
+
+        // try to get latest weight from today's stats
+        try {
+          const stats = await API.get(`/stats/${today()}`);
+          if (stats?.weight_kg) document.getElementById('weight').value = stats.weight_kg;
+        } catch(e) {}
+
+        // try to prefill calories from last week's average
+        const monday = getMonday(new Date());
+        const ws = monday.toISOString().split('T')[0];
+        try {
+          const weekly = await API.get(`/summary/weekly?week_start=${ws}`);
+          if (weekly?.avg_daily_calories > 0) {
+            document.getElementById('prefill-note').textContent =
+              `Profile loaded. Last week avg: ${Math.round(weekly.avg_daily_calories)} kcal/day.`;
+          }
+        } catch(e) {}
+      } catch(e) {}
+    }
+
+    function getMonday(d) {
+      const date = new Date(d);
+      const day = date.getDay();
+      date.setDate(date.getDate() - day + (day === 0 ? -6 : 1));
+      return date;
+    }
+
+    function setWalkMode(mode) {
+      walkMode = mode;
+      document.getElementById('btn-km').classList.toggle('active', mode==='km');
+      document.getElementById('btn-steps').classList.toggle('active', mode==='steps');
+      document.getElementById('field-km').classList.toggle('hidden', mode!=='km');
+      document.getElementById('field-steps').classList.toggle('hidden', mode!=='steps');
+    }
+
+    function setGymMode(enabled) {
+      gymEnabled = enabled;
+      document.getElementById('btn-gym-no').classList.toggle('active', !enabled);
+      document.getElementById('btn-gym-yes').classList.toggle('active', enabled);
+      document.getElementById('gym-fields').classList.toggle('hidden', !enabled);
+    }
+
+    function setDots(step) {
+      [1,2,3].forEach(i => document.getElementById('dot-'+i).classList.toggle('active', i<=step));
+    }
+
+    function getWalkKm() {
+      if (walkMode==='km') return parseFloat(document.getElementById('walk-km').value)||0;
+      return +((parseFloat(document.getElementById('walk-steps').value)||0)*0.000762).toFixed(3);
+    }
+
+    function getGymDailyKcal(weight) {
+      if (!gymEnabled) return 0;
+      const days = parseFloat(document.getElementById('gym-days').value)||0;
+      const mins = parseFloat(document.getElementById('gym-mins').value)||0;
+      const met = parseFloat(document.getElementById('gym-intensity').value)||5.0;
+      return (met * weight * (mins/60) * days) / 7;
+    }
+
+    function calcBMR(w,h,a,g) { return g==='male' ? 10*w+6.25*h-5*a+5 : 10*w+6.25*h-5*a-161; }
+    function calcWalkCals(w,km) { return w*km*0.9; }
+    function calcBMI(w,h) { return w/Math.pow(h/100,2); }
+    function bmiLabel(b) { return b<18.5?'Underweight':b<25?'Normal':b<30?'Overweight':'Obese'; }
+    function safeFloor(g) { return g==='male'?1350:1200; }
+    function calcRawPenalty(tdee,cals) { if(cals>=tdee) return 0; return Math.min((tdee-cals)/tdee*50,15); }
+    function calcSmoothed(prev,raw) { return +(0.7*prev+0.3*raw).toFixed(4); }
+
+    function startTracker() {
+      const gender=document.getElementById('gender').value;
+      const age=parseFloat(document.getElementById('age').value);
+      const weight=parseFloat(document.getElementById('weight').value);
+      const height=parseFloat(document.getElementById('height').value);
+      const km=getWalkKm();
+      const targetWeeks=parseInt(document.getElementById('weeks').value);
+      if(!age||!weight||!height||!targetWeeks){alert('Fill in all fields.');return;}
+
+      const bmr=calcBMR(weight,height,age,gender);
+      const walkCals=calcWalkCals(weight,km);
+      const gymCals=getGymDailyKcal(weight);
+      const tdee=bmr+walkCals+gymCals;
+      const bmi=calcBMI(weight,height);
+
+      state={gender,age,weight,height,km,targetWeeks,currentWeek:0,prevPenalty:0};
+      weeklyData=[{week:0,weight:+weight.toFixed(2),bmi:+bmi.toFixed(1),tdee:Math.round(tdee),effTdee:Math.round(tdee),thermoPct:0,calsIn:null,deficit:null,lost:0}];
+
+      const gymEnabled2 = gymEnabled;
+      let metricsHTML = `<div class="metrics-grid" style="grid-template-columns:repeat(${gymEnabled2?5:4},minmax(0,1fr))">
+        <div class="metric-card"><div class="metric-label">BMR</div><div class="metric-val">${Math.round(bmr)}</div><div class="metric-unit">kcal/day</div></div>
+        <div class="metric-card"><div class="metric-label">Walk cals</div><div class="metric-val">${Math.round(walkCals)}</div><div class="metric-unit">kcal/day</div></div>
+        ${gymEnabled2?`<div class="metric-card"><div class="metric-label">Gym cals</div><div class="metric-val">${Math.round(gymCals)}</div><div class="metric-unit">kcal/day avg</div></div>`:''}
+        <div class="metric-card"><div class="metric-label">TDEE</div><div class="metric-val">${Math.round(tdee)}</div><div class="metric-unit">kcal/day</div></div>
+        <div class="metric-card"><div class="metric-label">BMI</div><div class="metric-val">${bmi.toFixed(1)}</div><div class="metric-unit">${bmiLabel(bmi)}</div></div>
+      </div>`;
+
+      document.getElementById('baseline-metrics').innerHTML = metricsHTML;
+      document.getElementById('baseline-extra').innerHTML = `
+        <div class="divider"></div>
+        <div class="summary-row"><span>Safe floor</span><span>${safeFloor(gender)} kcal/day</span></div>
+        <div class="summary-row"><span>Thermogenesis</span><span>deficit-ratio · smoothed · cap 15%</span></div>
+        <div class="divider"></div>`;
+
+      document.getElementById('card-inputs').classList.add('hidden');
+      document.getElementById('card-baseline').classList.remove('hidden');
+      setDots(2);
+    }
+
+    function showWeeklyStep() {
+      document.getElementById('btn-start-weekly').classList.add('hidden');
+      document.getElementById('card-weekly').classList.remove('hidden');
+      setDots(3);
+      renderWeekPrompt();
+    }
+
+    function renderWeekPrompt() {
+      const w = state.currentWeek+1;
+      if(w>state.targetWeeks){
+        document.getElementById('week-prompt-area').innerHTML=`<div style="font-size:13px;color:var(--text2)">All ${state.targetWeeks} weeks logged.</div>`;
+        return;
+      }
+      document.getElementById('week-prompt-area').innerHTML=`
+        <div class="week-row">
+          <div class="week-label">Week ${w}</div>
+          <input type="number" id="week-cal-input" placeholder="avg daily calories (max 4000)" min="500" max="4000"
+            onkeydown="if(event.key==='Enter') logWeek(${w})"/>
+          <button class="btn btn-accent btn-sm" onclick="logWeek(${w})">Log →</button>
+        </div>
+        <div class="thermo-note">Prev thermogenesis penalty: ${state.prevPenalty.toFixed(2)}%</div>`;
+      document.getElementById('week-warn-area').innerHTML='';
+      setTimeout(()=>{ const i=document.getElementById('week-cal-input'); if(i)i.focus(); },50);
+    }
+
+    function logWeek(w) {
+      let calsIn=parseFloat(document.getElementById('week-cal-input').value);
+      if(!calsIn){alert('Enter calories.');return;}
+      if(calsIn>4000) calsIn=4000;
+      const floor=safeFloor(state.gender);
+      document.getElementById('week-warn-area').innerHTML = calsIn<floor
+        ? `<div class="alert alert-warn">⚠ ${Math.round(calsIn)} kcal is below safe minimum of ${floor} kcal/day. Calculating anyway.</div>` : '';
+
+      const prev=weeklyData[weeklyData.length-1];
+      const bmr=calcBMR(prev.weight,state.height,state.age,state.gender);
+      const walkCals=calcWalkCals(prev.weight,state.km);
+      const gymCals=getGymDailyKcal(prev.weight);
+      const tdee=bmr+walkCals+gymCals;
+      const rawPenalty=calcRawPenalty(tdee,calsIn);
+      const smoothed=calcSmoothed(state.prevPenalty,rawPenalty);
+      const effTdee=tdee*(1-smoothed/100);
+      const dailyDeficit=effTdee-calsIn;
+      const lostKg=(dailyDeficit*7)/7700;
+      const newWeight=Math.max(prev.weight-lostKg,20);
+      const newBMI=calcBMI(newWeight,state.height);
+
+      state.prevPenalty=smoothed;
+      weeklyData.push({week:w,weight:+newWeight.toFixed(2),bmi:+newBMI.toFixed(1),tdee:Math.round(tdee),effTdee:Math.round(effTdee),thermoPct:+smoothed.toFixed(2),calsIn:Math.round(calsIn),deficit:Math.round(dailyDeficit),lost:+lostKg.toFixed(2),warn:calsIn<floor});
+
+      state.currentWeek=w;
+      updateChart(); updateTable();
+      document.getElementById('card-chart').classList.remove('hidden');
+      document.getElementById('card-table').classList.remove('hidden');
+      renderWeekPrompt();
+    }
+
+    function updateChart() {
+      const labels=weeklyData.map(d=>d.week===0?'Start':`W${d.week}`);
+      const weights=weeklyData.map(d=>d.weight);
+      const startW=weeklyData[0].weight, lastW=weeklyData[weeklyData.length-1].weight;
+      const totalLost=+(startW-lastW).toFixed(2);
+      document.getElementById('chart-summary').innerHTML=`
+        <div class="divider"></div>
+        <div class="summary-row"><span>Starting weight</span><span>${startW} kg</span></div>
+        <div class="summary-row"><span>Current weight</span><span>${lastW} kg</span></div>
+        <div class="summary-row"><span>Total lost</span><span style="color:var(--accent)">${totalLost>0?'−':'+'}${Math.abs(totalLost)} kg</span></div>`;
+      const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+      const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)';
+      const tickColor=isDark?'#6b6a66':'#9e9d99';
+      if(chartInstance) chartInstance.destroy();
+      chartInstance=new Chart(document.getElementById('wlt-chart'),{
+        type:'line',
+        data:{labels,datasets:[{label:'Weight',data:weights,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.07)',borderWidth:2.5,pointBackgroundColor:'#1D9E75',pointRadius:5,fill:true,tension:0.35}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:isDark?'#1c1c1a':'#fff',borderColor:isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)',borderWidth:1,titleColor:isDark?'#f0ede8':'#1a1a18',bodyColor:isDark?'#9e9d99':'#6b6a66',padding:10,callbacks:{label:ctx=>{const d=weeklyData[ctx.dataIndex];return[` Weight: ${ctx.parsed.y.toFixed(2)} kg`,d.effTdee?` Eff.TDEE: ${d.effTdee} kcal`:'',d.thermoPct?` Thermo: −${d.thermoPct}%`:''].filter(Boolean);}}}},scales:{x:{grid:{display:false},ticks:{color:tickColor,font:{family:'DM Mono',size:11}}},y:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'DM Mono',size:11},callback:v=>v.toFixed(1)+' kg'}}}}
+      });
+    }
+
+    function updateTable() {
+      document.getElementById('results-tbody').innerHTML=weeklyData.map(d=>{
+        if(d.week===0) return `<tr><td style="font-weight:600">Start</td><td>${d.weight}</td><td>${d.bmi}<span class="bmi-tag">${bmiLabel(d.bmi)}</span></td><td>${d.tdee}</td><td>${d.effTdee}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+        const dc=d.deficit>0?'deficit-pos':'deficit-neg';
+        const ds=d.deficit>0?'−':'+';
+        const ls=d.lost>0?'−':'+';
+        return `<tr class="${d.warn?'warn-row':''}"><td>Week ${d.week}</td><td>${d.weight}</td><td>${d.bmi}<span class="bmi-tag">${bmiLabel(d.bmi)}</span></td><td>${d.tdee}</td><td>${d.effTdee}</td><td style="color:var(--text3);font-size:11px">−${d.thermoPct}%</td><td>${d.calsIn}${d.warn?'<span class="badge">⚠ below floor</span>':''}</td><td class="${dc}">${ds}${Math.abs(d.deficit)}</td><td>${ls}${Math.abs(d.lost)}</td></tr>`;
+      }).join('');
+    }
+
+    function downloadCanvas(canvas,filename){const l=document.createElement('a');l.download=filename;l.href=canvas.toDataURL('image/png');l.click();}
+    function downloadChart(){downloadCanvas(document.getElementById('wlt-chart'),'weight_chart.png');}
+    async function downloadTable(){const c=await html2canvas(document.getElementById('card-table'),{scale:2});downloadCanvas(c,'weight_table.png');}
+    async function downloadCombined(){
+      const bg=window.matchMedia('(prefers-color-scheme:dark)').matches?'#111110':'#f5f4f0';
+      const c1=await html2canvas(document.getElementById('card-chart'),{backgroundColor:bg,scale:2});
+      const c2=await html2canvas(document.getElementById('card-table'),{backgroundColor:bg,scale:2});
+      const cv=document.createElement('canvas'); const p=40;
+      cv.width=Math.max(c1.width,c2.width)+p*2; cv.height=c1.height+c2.height+p*3;
+      const ctx=cv.getContext('2d'); ctx.fillStyle=bg; ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.fillStyle=window.matchMedia('(prefers-color-scheme:dark)').matches?'#f0ede8':'#1a1a18';
+      ctx.font='600 28px Syne,sans-serif'; ctx.fillText('Weight Loss Report',p,p+10);
+      ctx.drawImage(c1,p,p+30); ctx.drawImage(c2,p,p+30+c1.height+p);
+      downloadCanvas(cv,'weight_loss_report.png');
+    }
+
+    function resetAll(){
+      state={}; weeklyData=[];
+      if(chartInstance){chartInstance.destroy();chartInstance=null;}
+      ['card-baseline','card-weekly','card-chart','card-table'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+      document.getElementById('btn-start-weekly').classList.remove('hidden');
+      document.getElementById('card-inputs').classList.remove('hidden');
+      setDots(1);
+    }
+
+    prefillFromProfile();
+  </script>
+</body>
+</html>

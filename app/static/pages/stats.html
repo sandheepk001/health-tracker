@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Stats — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+    .section-sub { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin: 1rem 0 0.75rem; padding-top: 1rem; border-top: 0.5px solid var(--border); }
+    .toggle { margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Daily stats</h1>
+      <p id="date-label"></p>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <div class="card">
+      <div class="card-label">Log for today</div>
+
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="log-date"/>
+      </div>
+
+      <div class="section-sub">Body</div>
+      <div class="field">
+        <label>Weight (kg)</label>
+        <input type="number" id="weight" placeholder="92.5" step="0.1"/>
+      </div>
+
+      <div class="section-sub">Walking</div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Distance (km)</label>
+          <input type="number" id="walk-km" placeholder="16" step="0.1"/>
+        </div>
+        <div class="field">
+          <label>Steps</label>
+          <input type="number" id="steps" placeholder="20000"/>
+        </div>
+      </div>
+
+      <div class="section-sub">Gym</div>
+      <div class="field">
+        <label>Did you work out today?</label>
+        <div class="toggle">
+          <button class="active" id="btn-gym-no" onclick="setGym(false)">No</button>
+          <button id="btn-gym-yes" onclick="setGym(true)">Yes</button>
+        </div>
+      </div>
+      <div id="gym-fields" class="hidden">
+        <div class="grid-2">
+          <div class="field">
+            <label>Duration (mins)</label>
+            <input type="number" id="gym-mins" placeholder="60"/>
+          </div>
+          <div class="field">
+            <label>Intensity</label>
+            <select id="gym-intensity">
+              <option value="light">Light</option>
+              <option value="moderate" selected>Moderate</option>
+              <option value="intense">Intense</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="saveStats()">Save stats</button>
+    </div>
+
+    <!-- RECENT -->
+    <div class="card">
+  <div class="card-label">Last 7 days</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Weight</th>
+          <th>Walk km</th>
+          <th>Walk kcal</th>
+          <th>Gym</th>
+          <th>Gym kcal</th>
+          <th>TDEE</th>
+          <th>Intake</th>
+          <th>Deficit</th>
+        </tr>
+      </thead>
+      <tbody id="stats-tbody">
+        <tr><td colspan="9" style="color:var(--text3)">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+  </div>
+
+  <script>
+    renderNav('stats');
+    let gymDone = false;
+
+    document.getElementById('log-date').value = today();
+    document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    function setGym(val) {
+      gymDone = val;
+      document.getElementById('btn-gym-no').classList.toggle('active', !val);
+      document.getElementById('btn-gym-yes').classList.toggle('active', val);
+      document.getElementById('gym-fields').classList.toggle('hidden', !val);
+    }
+
+    async function saveStats() {
+      const alertEl = document.getElementById('alert-area');
+
+      const walkKm = parseFloat(document.getElementById('walk-km').value) || null;
+      const steps = parseInt(document.getElementById('steps').value) || null;
+
+      const payload = {
+        date: document.getElementById('log-date').value,
+        weight_kg: parseFloat(document.getElementById('weight').value) || null,
+        walk_km: walkKm,
+        steps: steps,
+        gym_done: gymDone,
+        gym_mins: gymDone ? parseInt(document.getElementById('gym-mins').value) || null : null,
+        gym_intensity: gymDone ? document.getElementById('gym-intensity').value : null,
+        is_fasting: false
+      };
+
+      // warn if both km and steps are filled
+      if (walkKm && steps) {
+        alertEl.innerHTML = '<div class="alert alert-warn">⚠ Both km and steps are filled. Using km — clear one field to avoid confusion.</div>';
+        payload.steps = null;
+      }
+
+      try {
+        await API.post('/stats/log', payload);
+        alertEl.innerHTML = '<div class="alert alert-success">Stats saved successfully.</div>';
+        setTimeout(() => alertEl.innerHTML = '', 3000);
+        loadRecent();
+      } catch(e) {
+        alertEl.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function loadRecent() {
+  const to = today();
+  const from = new Date();
+  from.setDate(from.getDate() - 6);
+  const fromStr = from.toISOString().split('T')[0];
+
+  try {
+    const tbody = document.getElementById('stats-tbody');
+
+    // fetch daily summaries for last 7 days
+    const days = [];
+    const cur = new Date(fromStr);
+    while (cur <= new Date(to)) {
+      days.push(cur.toISOString().split('T')[0]);
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const summaries = await Promise.all(
+      days.map(d => API.get(`/summary/daily/${d}`).catch(() => null))
+    );
+
+    const rows = summaries.filter(Boolean).reverse();
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">No stats logged yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(s => {
+      const defVal = s.deficit;
+      const defStr = defVal != null
+        ? `<span style="color:${defVal > 0 ? 'var(--accent)' : 'var(--danger)'}">${defVal > 0 ? '−' : '+'}${Math.abs(Math.round(defVal))}</span>`
+        : '—';
+      return `<tr>
+        <td>${s.date}</td>
+        <td>${s.weight_kg ?? '—'}</td>
+        <td>${s.walk_km ?? '—'}</td>
+        <td>${s.walk_cals != null ? Math.round(s.walk_cals) : '—'}</td>
+        <td>${s.gym_done ? s.gym_mins + 'min · ' + s.gym_intensity : s.stats_logged ? 'Rest' : '—'}</td>
+        <td>${s.gym_cals != null ? Math.round(s.gym_cals) : '—'}</td>
+        <td>${s.tdee != null ? Math.round(s.tdee) : '—'}</td>
+        <td>${s.total_calories > 0 ? Math.round(s.total_calories) : '—'}</td>
+        <td>${defStr}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+    loadRecent();
+  </script>
+</body>
+</html>

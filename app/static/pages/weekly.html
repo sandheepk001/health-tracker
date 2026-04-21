@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Weekly — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+
+    .week-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; }
+    .week-nav button { height: 36px; width: 36px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: transparent; color: var(--text); font-size: 16px; cursor: pointer; }
+    .week-nav button:hover { background: var(--surface2); }
+    .week-label { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; flex: 1; text-align: center; }
+
+    .summary-cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 1.25rem; }
+
+    .chart-wrap { position: relative; height: 240px; width: 100%; }
+
+    .override-row { display: flex; gap: 10px; align-items: flex-end; }
+    .override-row .field { flex: 1; margin-bottom: 0; }
+
+    .day-table td { font-size: 12px; }
+    .deficit-pos { color: var(--accent); }
+    .deficit-neg { color: var(--danger); }
+    .not-logged { color: var(--text3); font-style: italic; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Weekly overview</h1>
+      <p>Calories consumed · burned · deficit · activity</p>
+    </div>
+
+    <div class="week-nav">
+      <button onclick="shiftWeek(-1)">←</button>
+      <div class="week-label" id="week-label"></div>
+      <button onclick="shiftWeek(1)">→</button>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <!-- TOP METRICS -->
+    <div class="summary-cards">
+      <div class="metric-card">
+        <div class="metric-label">Avg intake</div>
+        <div class="metric-val" id="avg-intake">—</div>
+        <div class="metric-unit">kcal / day</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg TDEE</div>
+        <div class="metric-val" id="avg-tdee">—</div>
+        <div class="metric-unit">kcal / day</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg deficit</div>
+        <div class="metric-val" id="avg-deficit">—</div>
+        <div class="metric-unit">kcal / day</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Days logged</div>
+        <div class="metric-val" id="days-logged">—</div>
+        <div class="metric-unit">of 7</div>
+      </div>
+    </div>
+
+    <!-- SECONDARY METRICS -->
+    <div class="summary-cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      <div class="metric-card">
+        <div class="metric-label">Avg walk</div>
+        <div class="metric-val" id="avg-walk">—</div>
+        <div class="metric-unit">km / day</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg walk burned</div>
+        <div class="metric-val" id="avg-walk-cals">—</div>
+        <div class="metric-unit">kcal / day</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Gym sessions</div>
+        <div class="metric-val" id="gym-sessions">—</div>
+        <div class="metric-unit">this week</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg gym burned</div>
+        <div class="metric-val" id="avg-gym-cals">—</div>
+        <div class="metric-unit">kcal / day</div>
+      </div>
+    </div>
+
+    <!-- OVERRIDE -->
+    <div class="card">
+      <div class="card-label">Tracker calorie override</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:1rem">
+        The weight loss tracker uses your logged weekly average automatically.
+        Override here if needed.
+      </p>
+      <div class="override-row">
+        <div class="field">
+          <label>Override avg daily calories (kcal)</label>
+          <input type="number" id="override-input" placeholder="Leave empty to use logged average"/>
+        </div>
+        <button class="btn btn-accent" style="height:38px" onclick="applyOverride()">Apply</button>
+        <button class="btn btn-secondary" style="height:38px" onclick="clearOverride()">Clear</button>
+      </div>
+      <div id="effective-note" style="font-size:12px;color:var(--text3);margin-top:8px;font-family:'DM Mono',monospace"></div>
+    </div>
+
+    <!-- CHART — intake vs TDEE -->
+    <div class="card">
+      <div class="card-label">Daily intake vs TDEE</div>
+      <div style="display:flex;gap:16px;margin-bottom:1rem;font-size:12px;font-family:'DM Mono',monospace;color:var(--text2)">
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#1D9E75;display:inline-block"></span>Intake</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#378ADD;display:inline-block"></span>TDEE</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="week-chart" role="img" aria-label="Bar chart comparing daily intake vs TDEE"></canvas>
+      </div>
+    </div>
+
+    <!-- DAY BREAKDOWN TABLE -->
+    <div class="card">
+      <div class="card-label">Day breakdown</div>
+      <div class="table-wrap">
+        <table class="day-table">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Weight</th>
+              <th>Intake</th>
+              <th>TDEE</th>
+              <th>Deficit</th>
+              <th>Walk km</th>
+              <th>Walk kcal</th>
+              <th>Gym</th>
+              <th>Gym kcal</th>
+            </tr>
+          </thead>
+          <tbody id="day-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    renderNav('weekly');
+
+    let weekStart = getMonday(new Date());
+    let chartInstance = null;
+
+    function getMonday(d) {
+      const date = new Date(d);
+      const day = date.getDay();
+      date.setDate(date.getDate() - day + (day === 0 ? -6 : 1));
+      return date;
+    }
+
+    function toDateStr(d) { return d.toISOString().split('T')[0]; }
+
+    function shiftWeek(dir) {
+      weekStart.setDate(weekStart.getDate() + dir * 7);
+      loadWeek();
+    }
+
+    function updateWeekLabel() {
+      const end = new Date(weekStart);
+      end.setDate(end.getDate() + 6);
+      document.getElementById('week-label').textContent =
+        `${weekStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} — ${end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+
+    function avg(arr) {
+      const valid = arr.filter(v => v != null && v > 0);
+      return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+    }
+
+    async function loadWeek() {
+      updateWeekLabel();
+      const ws = toDateStr(weekStart);
+      const override = parseFloat(document.getElementById('override-input').value) || null;
+
+      try {
+        // fetch weekly summary for override/effective calories
+        const weeklyUrl = override
+          ? `/summary/weekly?week_start=${ws}&override_calories=${override}`
+          : `/summary/weekly?week_start=${ws}`;
+        const weekly = await API.get(weeklyUrl);
+
+        // fetch daily summaries for full data
+        const days = [];
+        const cur = new Date(weekStart);
+        for (let i = 0; i < 7; i++) {
+          days.push(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+        const summaries = await Promise.all(
+          days.map(d => API.get(`/summary/daily/${d}`).catch(() => null))
+        );
+
+        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+        // compute averages
+        const intakes = summaries.map(s => s?.total_calories || 0);
+        const tdees = summaries.map(s => s?.tdee);
+        const deficits = summaries.map(s => s?.deficit);
+        const walks = summaries.map(s => s?.walk_km);
+        const walkCals = summaries.map(s => s?.walk_cals);
+        const gymCals = summaries.map(s => s?.gym_cals);
+        const gymSessions = summaries.filter(s => s?.gym_done).length;
+
+        const avgIntake = avg(intakes.filter(v => v > 0));
+        const avgTdee = avg(tdees);
+        const avgDeficit = avg(deficits);
+        const avgWalk = avg(walks);
+        const avgWalkCals = avg(walkCals);
+        const avgGymCals = avg(gymCals);
+        const daysLogged = intakes.filter(v => v > 0).length;
+
+        // top metrics
+        document.getElementById('avg-intake').textContent = avgIntake ? Math.round(avgIntake) : '—';
+        document.getElementById('avg-tdee').textContent = avgTdee ? Math.round(avgTdee) : '—';
+        document.getElementById('days-logged').textContent = daysLogged;
+        document.getElementById('avg-walk').textContent = avgWalk ? avgWalk.toFixed(1) : '—';
+        document.getElementById('avg-walk-cals').textContent = avgWalkCals ? Math.round(avgWalkCals) : '—';
+        document.getElementById('gym-sessions').textContent = gymSessions;
+        document.getElementById('avg-gym-cals').textContent = avgGymCals ? Math.round(avgGymCals) : '—';
+
+        // avg deficit with color
+        const defEl = document.getElementById('avg-deficit');
+        if (avgDeficit != null) {
+          defEl.textContent = Math.round(Math.abs(avgDeficit));
+          defEl.style.color = avgDeficit > 0 ? 'var(--accent)' : 'var(--danger)';
+          defEl.nextElementSibling.textContent = avgDeficit > 0 ? 'kcal deficit / day' : 'kcal surplus / day';
+        }
+
+        // effective calories note
+        document.getElementById('effective-note').textContent = override
+          ? `Override active: using ${Math.round(override)} kcal/day in tracker`
+          : avgIntake
+            ? `Tracker will use ${Math.round(weekly.effective_calories)} kcal/day (logged average)`
+            : 'No food logged this week yet';
+
+        // chart
+        renderChart(
+          dayNames,
+          summaries.map(s => s?.total_calories > 0 ? Math.round(s.total_calories) : 0),
+          summaries.map(s => s?.tdee ? Math.round(s.tdee) : 0)
+        );
+
+        // day table
+        document.getElementById('day-tbody').innerHTML = summaries.map((s, i) => {
+          if (!s) return `<tr><td>${dayNames[i]}</td><td colspan="8" class="not-logged">No data</td></tr>`;
+
+          const hasStats = s.stats_logged;
+          const hasFood = s.total_calories > 0;
+
+          const defVal = s.deficit;
+          const defStr = defVal != null
+            ? `<span class="${defVal > 0 ? 'deficit-pos' : 'deficit-neg'}">${defVal > 0 ? '−' : '+'}${Math.abs(Math.round(defVal))}</span>`
+            : '—';
+
+          return `<tr>
+            <td style="font-weight:600">${dayNames[i]}<br><span style="font-size:10px;color:var(--text3);font-weight:400">${s.date}</span></td>
+            <td>${s.weight_kg != null ? s.weight_kg + ' kg' : '<span class="not-logged">—</span>'}</td>
+            <td>${hasFood ? Math.round(s.total_calories) + ' kcal' : '<span class="not-logged">—</span>'}</td>
+            <td>${s.tdee != null ? Math.round(s.tdee) + ' kcal' : '<span class="not-logged">—</span>'}</td>
+            <td>${defStr}</td>
+            <td>${s.walk_km != null ? s.walk_km + ' km' : '<span class="not-logged">—</span>'}</td>
+            <td>${s.walk_cals != null ? Math.round(s.walk_cals) + ' kcal' : '<span class="not-logged">—</span>'}</td>
+            <td>${hasStats ? (s.gym_done ? s.gym_mins + 'min · ' + s.gym_intensity : 'Rest') : '<span class="not-logged">—</span>'}</td>
+            <td>${s.gym_cals != null && s.gym_done ? Math.round(s.gym_cals) + ' kcal' : '<span class="not-logged">—</span>'}</td>
+          </tr>`;
+        }).join('');
+
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    function renderChart(labels, intakes, tdees) {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      const tickColor = isDark ? '#6b6a66' : '#9e9d99';
+
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(document.getElementById('week-chart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Intake',
+              data: intakes,
+              backgroundColor: 'rgba(29,158,117,0.75)',
+              borderRadius: 5,
+              borderSkipped: false,
+            },
+            {
+              label: 'TDEE',
+              data: tdees,
+              backgroundColor: 'rgba(55,138,221,0.5)',
+              borderRadius: 5,
+              borderSkipped: false,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: isDark ? '#1c1c1a' : '#fff',
+              borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+              borderWidth: 1,
+              titleColor: isDark ? '#f0ede8' : '#1a1a18',
+              bodyColor: isDark ? '#9e9d99' : '#6b6a66',
+              padding: 10,
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} kcal`
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 } } },
+            y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, callback: v => v + ' kcal' } }
+          }
+        }
+      });
+    }
+
+    function applyOverride() { loadWeek(); }
+    function clearOverride() {
+      document.getElementById('override-input').value = '';
+      loadWeek();
+    }
+
+    // reload on tab focus
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') loadWeek();
+    });
+
+    loadWeek();
+  </script>
+</body>
+</html>
