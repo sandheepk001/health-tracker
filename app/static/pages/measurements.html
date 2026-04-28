@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Measurements — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .mtype-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .mtype-tab { height: 30px; padding: 0 12px; font-size: 11px; font-weight: 600; border: 0.5px solid var(--border2); border-radius: 20px; background: transparent; color: var(--text2); cursor: pointer; transition: all 0.15s; font-family: 'Syne', sans-serif; }
+    .mtype-tab.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+    .measurement-entry { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+    .measurement-entry:last-child { border-bottom: none; }
+    .m-date { color: var(--text2); font-family: 'DM Mono', monospace; }
+    .m-val { font-family: 'DM Mono', monospace; font-weight: 500; }
+    .m-trend-up { color: var(--danger); font-size: 11px; }
+    .m-trend-down { color: var(--accent); font-size: 11px; }
+    .chart-wrap { position: relative; height: 220px; width: 100%; margin-bottom: 1rem; }
+    .latest-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Body measurements</h1>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <!-- LOG MEASUREMENT -->
+    <div class="card">
+      <div class="card-label">Log measurement</div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="m-date"/>
+        </div>
+        <div class="field">
+          <label>Measurement type</label>
+          <select id="m-type" onchange="updateMeasurementLabel()">
+            <option value="waist">Waist</option>
+            <option value="chest">Chest</option>
+            <option value="hips">Hips</option>
+            <option value="left_arm">Left arm</option>
+            <option value="right_arm">Right arm</option>
+            <option value="left_thigh">Left thigh</option>
+            <option value="right_thigh">Right thigh</option>
+            <option value="neck">Neck</option>
+            <option value="body_fat_pct">Body fat %</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label id="m-value-label">Value (cm)</label>
+        <input type="number" id="m-value" step="0.1" placeholder="e.g. 85"/>
+      </div>
+      <div class="field">
+        <label>Notes (optional)</label>
+        <input type="text" id="m-notes" placeholder="Any notes..."/>
+      </div>
+      <button class="btn btn-primary" onclick="logMeasurement()">Save measurement</button>
+    </div>
+
+    <!-- LATEST SNAPSHOT -->
+    <div class="card">
+      <div class="card-label">Latest snapshot</div>
+      <div class="latest-grid" id="latest-grid">
+        <div style="font-size:13px;color:var(--text3);grid-column:1/-1">Loading...</div>
+      </div>
+    </div>
+
+    <!-- HISTORY CHART -->
+    <div class="card">
+      <div class="card-label">History</div>
+      <div class="mtype-tabs" id="history-tabs"></div>
+      <div class="chart-wrap">
+        <canvas id="m-chart" role="img" aria-label="Body measurement history chart"></canvas>
+      </div>
+      <div id="m-history-list"></div>
+    </div>
+  </div>
+
+  <script>
+    renderNav('measurements');
+
+    let mChartInstance = null;
+    const TYPES = [
+      { key: 'waist', label: 'Waist', unit: 'cm' },
+      { key: 'chest', label: 'Chest', unit: 'cm' },
+      { key: 'hips', label: 'Hips', unit: 'cm' },
+      { key: 'left_arm', label: 'L. Arm', unit: 'cm' },
+      { key: 'right_arm', label: 'R. Arm', unit: 'cm' },
+      { key: 'left_thigh', label: 'L. Thigh', unit: 'cm' },
+      { key: 'right_thigh', label: 'R. Thigh', unit: 'cm' },
+      { key: 'neck', label: 'Neck', unit: 'cm' },
+      { key: 'body_fat_pct', label: 'Body fat', unit: '%' },
+    ];
+
+    document.getElementById('m-date').value = today();
+
+    function updateMeasurementLabel() {
+      const type = document.getElementById('m-type').value;
+      const t = TYPES.find(t => t.key === type);
+      document.getElementById('m-value-label').textContent = `Value (${t?.unit || 'cm'})`;
+    }
+
+    async function logMeasurement() {
+      const alertEl = document.getElementById('alert-area');
+      const type = document.getElementById('m-type').value;
+      const value = parseFloat(document.getElementById('m-value').value);
+      if (!value) {
+        alertEl.innerHTML = '<div class="alert alert-danger">Please enter a value.</div>';
+        return;
+      }
+
+      const payload = {
+        date: document.getElementById('m-date').value,
+        measurement_type: type,
+        notes: document.getElementById('m-notes').value || null
+      };
+      if (type === 'body_fat_pct') payload.body_fat_pct = value;
+      else payload.value_cm = value;
+
+      try {
+        await API.post('/measurements', payload);
+        alertEl.innerHTML = '<div class="alert alert-success">Measurement saved.</div>';
+        document.getElementById('m-value').value = '';
+        document.getElementById('m-notes').value = '';
+        setTimeout(() => alertEl.innerHTML = '', 3000);
+        loadLatest();
+        loadHistory(type);
+      } catch(e) {
+        alertEl.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function loadLatest() {
+      try {
+        const data = await API.get('/measurements/latest');
+        const el = document.getElementById('latest-grid');
+        if (!data.length) {
+          el.innerHTML = '<div style="font-size:13px;color:var(--text3);grid-column:1/-1">No measurements logged yet.</div>';
+          return;
+        }
+        el.innerHTML = data.map(m => {
+          const t = TYPES.find(t => t.key === m.measurement_type);
+          const val = m.measurement_type === 'body_fat_pct' ? m.body_fat_pct : m.value_cm;
+          return `<div class="metric-card">
+            <div class="metric-label">${t?.label || m.measurement_type}</div>
+            <div class="metric-val">${val ?? '—'}</div>
+            <div class="metric-unit">${t?.unit || 'cm'} · ${m.date}</div>
+          </div>`;
+        }).join('');
+
+        // build history tabs from available types
+        const availableTypes = [...new Set(data.map(m => m.measurement_type))];
+        const tabsEl = document.getElementById('history-tabs');
+        tabsEl.innerHTML = availableTypes.map((key, i) => {
+          const t = TYPES.find(t => t.key === key);
+          return `<button class="mtype-tab ${i === 0 ? 'active' : ''}"
+            onclick="selectHistoryTab('${key}', this)">${t?.label || key}</button>`;
+        }).join('');
+        if (availableTypes.length) loadHistory(availableTypes[0]);
+      } catch(e) {}
+    }
+
+    function selectHistoryTab(type, btn) {
+      document.querySelectorAll('.mtype-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadHistory(type);
+    }
+
+    async function loadHistory(type) {
+      try {
+        const data = await API.get(`/measurements/history/${type}`);
+        const t = TYPES.find(t => t.key === type);
+        const unit = t?.unit || 'cm';
+
+        if (!data.length) {
+          document.getElementById('m-history-list').innerHTML =
+            '<div style="font-size:13px;color:var(--text3)">No history for this measurement.</div>';
+          return;
+        }
+
+        // chart
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        const tickColor = isDark ? '#6b6a66' : '#9e9d99';
+        const labels = data.map(d => d.date);
+        const values = data.map(d => type === 'body_fat_pct' ? d.body_fat_pct : d.value_cm);
+
+        if (mChartInstance) mChartInstance.destroy();
+        mChartInstance = new Chart(document.getElementById('m-chart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              borderColor: '#EF9F27',
+              backgroundColor: 'rgba(239,159,39,0.07)',
+              borderWidth: 2.5,
+              pointBackgroundColor: '#EF9F27',
+              pointRadius: 5,
+              fill: true,
+              tension: 0.35
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: {
+              callbacks: { label: ctx => ` ${ctx.parsed.y} ${unit}` }
+            }},
+            scales: {
+              x: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 } } },
+              y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, callback: v => v + ' ' + unit } }
+            }
+          }
+        });
+
+        // list
+        const reversed = [...data].reverse();
+        document.getElementById('m-history-list').innerHTML = reversed.map((m, i) => {
+          const prev = reversed[i + 1];
+          const val = type === 'body_fat_pct' ? m.body_fat_pct : m.value_cm;
+          let trendHTML = '';
+          if (prev) {
+            const prevVal = type === 'body_fat_pct' ? prev.body_fat_pct : prev.value_cm;
+            const diff = +(val - prevVal).toFixed(1);
+            if (diff < 0) trendHTML = `<span class="m-trend-down">▼ ${Math.abs(diff)}${unit}</span>`;
+            else if (diff > 0) trendHTML = `<span class="m-trend-up">▲ ${diff}${unit}</span>`;
+          }
+          return `<div class="measurement-entry">
+            <span class="m-date">${m.date}</span>
+            <div style="display:flex;align-items:center;gap:12px">
+              ${trendHTML}
+              <span class="m-val">${val} ${unit}</span>
+              <button class="btn btn-danger btn-sm" onclick="deleteMeasurement(${m.id}, '${type}')">✕</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch(e) {}
+    }
+
+    async function deleteMeasurement(id, type) {
+      if (!confirm('Delete this measurement?')) return;
+      try {
+        await API.delete(`/measurements/${id}`);
+        loadLatest();
+        loadHistory(type);
+      } catch(e) {}
+    }
+
+    loadLatest();
+  </script>
+</body>
+</html>

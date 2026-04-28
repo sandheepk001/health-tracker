@@ -103,6 +103,12 @@ def compute_daily(user_id: int, log_date: date, db: Session):
         "weight_kg": stats.weight_kg if stats else None,
         "walk_km": effective_km,
         "steps": stats.steps if stats else None,
+        "water_ml": stats.water_ml if stats else 0,
+        "sleep_hours": stats.sleep_hours if stats else None,
+        "sleep_quality": stats.sleep_quality if stats else None,
+        "is_rest_day": stats.is_rest_day if stats else False,
+        "rest_day_reason": stats.rest_day_reason if stats else None,
+        "mood": stats.mood if stats else None,
         "gym_done": stats.gym_done if stats else None,
         "gym_mins": stats.gym_mins if stats else None,
         "gym_intensity": stats.gym_intensity if stats else None,
@@ -110,7 +116,7 @@ def compute_daily(user_id: int, log_date: date, db: Session):
         "walk_cals": walk_cals,
         "gym_cals": gym_cals,
         "tdee": tdee,
-        "deficit": round(tdee - total_calories, 2) if is_fasting and tdee else deficit,
+        "deficit": round(tdee, 2) if is_fasting and tdee else deficit,
     }
 
 

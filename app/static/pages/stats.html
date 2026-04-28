@@ -10,7 +10,17 @@
     .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
     .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
     .section-sub { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin: 1rem 0 0.75rem; padding-top: 1rem; border-top: 0.5px solid var(--border); }
-    .toggle { margin-top: 2px; }
+    .water-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .water-btn { height: 34px; padding: 0 14px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; border: 0.5px solid var(--border2); border-radius: var(--radius); background: transparent; color: var(--text); cursor: pointer; transition: all 0.15s; }
+    .water-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .water-progress { margin-top: 10px; }
+    .water-bar { height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; margin-top: 6px; }
+    .water-fill { height: 100%; border-radius: 4px; background: #378ADD; transition: width 0.4s; }
+    .water-label { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; display: flex; justify-content: space-between; }
+    .mood-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .mood-btn { height: 34px; padding: 0 12px; font-size: 12px; font-weight: 600; border: 0.5px solid var(--border2); border-radius: var(--radius); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.15s; font-family: 'Syne', sans-serif; }
+    .mood-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+    .rest-section { background: var(--surface2); border-radius: var(--radius); padding: 14px; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -31,37 +41,40 @@
 
       <div class="field">
         <label>Date</label>
-        <input type="date" id="log-date"/>
+        <input type="date" id="log-date" onchange="loadTodayStats()"/>
       </div>
 
+      <!-- BODY -->
       <div class="section-sub">Body</div>
       <div class="field">
         <label>Weight (kg)</label>
-        <input type="number" id="weight" placeholder="92.5" step="0.1"/>
+        <input type="number" id="weight" placeholder="92.5" step="0.1" min="20" max="300"/>
       </div>
 
+      <!-- WALKING -->
       <div class="section-sub">Walking</div>
-        <div class="field" style="margin-bottom:10px">
-          <label>Input type</label>
-          <div class="toggle">
-            <button class="active" id="btn-walk-km" onclick="setWalkInput('km')">Distance (km)</button>
-            <button id="btn-walk-steps" onclick="setWalkInput('steps')">Steps</button>
-          </div>
+      <div class="field">
+        <label>Input type</label>
+        <div class="toggle">
+          <button class="active" id="btn-walk-km" onclick="setWalkInput('km')">Distance (km)</button>
+          <button id="btn-walk-steps" onclick="setWalkInput('steps')">Steps</button>
         </div>
-        <div class="field" id="walk-km-field">
-          <label>Distance (km)</label>
-          <input type="number" id="walk-km" placeholder="e.g. 16" step="0.1" min="0" max="100"/>
-        </div>
-        <div class="field hidden" id="walk-steps-field">
-          <label>Steps</label>
-          <input type="number" id="steps" placeholder="e.g. 20000" min="0" max="200000"/>
-        </div>
+      </div>
+      <div class="field" id="walk-km-field">
+        <label>Distance (km)</label>
+        <input type="number" id="walk-km" placeholder="e.g. 16" step="0.1" min="0" max="100"/>
+      </div>
+      <div class="field hidden" id="walk-steps-field">
+        <label>Steps</label>
+        <input type="number" id="steps" placeholder="e.g. 20000" min="0" max="200000"/>
+      </div>
 
-      <div class="section-sub">Gym</div>
+      <!-- GYM -->
+      <div class="section-sub">Gym / Workout</div>
       <div class="field">
         <label>Did you work out today?</label>
         <div class="toggle">
-          <button class="active" id="btn-gym-no" onclick="setGym(false)">No</button>
+          <button id="btn-gym-no" onclick="setGym(false)">No</button>
           <button id="btn-gym-yes" onclick="setGym(true)">Yes</button>
         </div>
       </div>
@@ -82,50 +95,139 @@
         </div>
       </div>
 
+      <!-- REST DAY -->
+      <div class="section-sub">Rest day</div>
+      <div class="field">
+        <label>Is this a rest day?</label>
+        <div class="toggle">
+          <button class="active" id="btn-rest-no" onclick="setRestDay(false)">No</button>
+          <button id="btn-rest-yes" onclick="setRestDay(true)">Yes</button>
+        </div>
+      </div>
+      <div id="rest-fields" class="hidden">
+        <div class="field">
+          <label>Reason (optional)</label>
+          <select id="rest-reason">
+            <option value="planned">Planned rest</option>
+            <option value="injury">Injury / soreness</option>
+            <option value="tired">Fatigue</option>
+            <option value="sick">Sick</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- WATER -->
+      <div class="section-sub">Water intake</div>
+      <div class="field">
+        <label>Quick add</label>
+        <div class="water-buttons">
+          <button class="water-btn" onclick="addWater(250)">+ 1 glass (250ml)</button>
+          <button class="water-btn" onclick="addWater(500)">+ 500ml</button>
+          <button class="water-btn" onclick="addWater(750)">+ 750ml</button>
+          <button class="water-btn" onclick="addWater(1000)">+ 1L</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Or enter manually (ml)</label>
+        <input type="number" id="water-ml" placeholder="e.g. 300" min="0" max="5000"/>
+      </div>
+      <div class="water-progress">
+        <div class="water-label">
+          <span id="water-current">0 ml</span>
+          <span id="water-goal">/ 2500 ml goal</span>
+        </div>
+        <div class="water-bar">
+          <div class="water-fill" id="water-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- SLEEP -->
+      <div class="section-sub">Sleep</div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Hours slept</label>
+          <input type="number" id="sleep-hours" placeholder="7.5" step="0.5" min="0" max="24"/>
+        </div>
+        <div class="field">
+          <label>Sleep quality</label>
+          <select id="sleep-quality">
+            <option value="">— select —</option>
+            <option value="poor">Poor</option>
+            <option value="fair">Fair</option>
+            <option value="good">Good</option>
+            <option value="excellent">Excellent</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- MOOD -->
+      <div class="section-sub">Mood</div>
+      <div class="field">
+        <label>How are you feeling?</label>
+        <div class="mood-buttons">
+          <button class="mood-btn" id="mood-great" onclick="setMood('great')">😄 Great</button>
+          <button class="mood-btn" id="mood-good" onclick="setMood('good')">🙂 Good</button>
+          <button class="mood-btn" id="mood-okay" onclick="setMood('okay')">😐 Okay</button>
+          <button class="mood-btn" id="mood-tired" onclick="setMood('tired')">😴 Tired</button>
+          <button class="mood-btn" id="mood-stressed" onclick="setMood('stressed')">😰 Stressed</button>
+          <button class="mood-btn" id="mood-bad" onclick="setMood('bad')">😞 Bad</button>
+        </div>
+      </div>
+
       <button class="btn btn-primary" onclick="saveStats()">Save stats</button>
     </div>
 
-    <!-- RECENT -->
-    <!-- RECENT -->
-<div class="card">
-  <div class="card-label">Last 7 days</div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Weight</th>
-          <th>Walk</th>
-          <th>Walk kcal</th>
-          <th>Gym</th>
-          <th>Gym kcal</th>
-          <th>TDEE</th>
-          <th>Intake</th>
-          <th>Deficit</th>
-        </tr>
-      </thead>
-      <tbody id="stats-tbody">
-        <tr><td colspan="9" style="color:var(--text3)">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+    <!-- LAST 7 DAYS -->
+    <div class="card">
+      <div class="card-label">Last 7 days</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Weight</th>
+              <th>Walk</th>
+              <th>Walk kcal</th>
+              <th>Gym</th>
+              <th>Water</th>
+              <th>Sleep</th>
+              <th>Mood</th>
+              <th>TDEE</th>
+              <th>Deficit</th>
+            </tr>
+          </thead>
+          <tbody id="stats-tbody">
+            <tr><td colspan="10" style="color:var(--text3)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <script>
     renderNav('stats');
+
     let gymDone = null;
+    let walkInputMode = 'km';
+    let isRestDay = false;
+    let selectedMood = null;
+    let currentWaterMl = 0;
+    let waterGoal = 2500;
 
     document.getElementById('log-date').value = today();
-    document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
 
-    function setGym(val) {
-      gymDone = val;
-      document.getElementById('btn-gym-no').classList.toggle('active', !val);
-      document.getElementById('btn-gym-yes').classList.toggle('active', val);
-      document.getElementById('gym-fields').classList.toggle('hidden', !val);
+    // load user goals
+    async function loadGoals() {
+      try {
+        const user = await API.get('/users/me');
+        waterGoal = user.daily_water_goal || 2500;
+        document.getElementById('water-goal').textContent = `/ ${waterGoal} ml goal`;
+      } catch(e) {}
     }
-    let walkInputMode = 'km';
 
     function setWalkInput(mode) {
       walkInputMode = mode;
@@ -133,40 +235,100 @@
       document.getElementById('btn-walk-steps').classList.toggle('active', mode === 'steps');
       document.getElementById('walk-km-field').classList.toggle('hidden', mode !== 'km');
       document.getElementById('walk-steps-field').classList.toggle('hidden', mode !== 'steps');
-      // clear the inactive field value
       if (mode === 'km') document.getElementById('steps').value = '';
       else document.getElementById('walk-km').value = '';
     }
+
+    function setGym(val) {
+      gymDone = val;
+      document.getElementById('btn-gym-no').classList.toggle('active', !val);
+      document.getElementById('btn-gym-yes').classList.toggle('active', val);
+      document.getElementById('gym-fields').classList.toggle('hidden', !val);
+    }
+
+    function setRestDay(val) {
+      isRestDay = val;
+      document.getElementById('btn-rest-no').classList.toggle('active', !val);
+      document.getElementById('btn-rest-yes').classList.toggle('active', val);
+      document.getElementById('rest-fields').classList.toggle('hidden', !val);
+      // if rest day, clear gym
+      if (val) { setGym(false); }
+    }
+
+    function setMood(mood) {
+      selectedMood = mood;
+      document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('mood-' + mood).classList.add('active');
+    }
+
+    function addWater(ml) {
+      currentWaterMl = Math.min(currentWaterMl + ml, 10000);
+      updateWaterDisplay();
+    }
+
+    function updateWaterDisplay() {
+      document.getElementById('water-current').textContent = currentWaterMl + ' ml';
+      const pct = Math.min((currentWaterMl / waterGoal) * 100, 100);
+      document.getElementById('water-fill').style.width = pct + '%';
+      document.getElementById('water-fill').style.background = pct >= 100 ? 'var(--accent)' : '#378ADD';
+    }
+
+    async function loadTodayStats() {
+      const date = document.getElementById('log-date').value;
+      try {
+        const s = await API.get(`/stats/${date}`);
+        if (s.weight_kg) document.getElementById('weight').value = s.weight_kg;
+        if (s.walk_km) { setWalkInput('km'); document.getElementById('walk-km').value = s.walk_km; }
+        else if (s.steps) { setWalkInput('steps'); document.getElementById('steps').value = s.steps; }
+        if (s.gym_done) {
+          setGym(true);
+          if (s.gym_mins) document.getElementById('gym-mins').value = s.gym_mins;
+          if (s.gym_intensity) document.getElementById('gym-intensity').value = s.gym_intensity;
+        }
+        if (s.is_rest_day) setRestDay(true);
+        if (s.rest_day_reason) document.getElementById('rest-reason').value = s.rest_day_reason;
+        if (s.water_ml) { currentWaterMl = s.water_ml; updateWaterDisplay(); }
+        if (s.sleep_hours) document.getElementById('sleep-hours').value = s.sleep_hours;
+        if (s.sleep_quality) document.getElementById('sleep-quality').value = s.sleep_quality;
+        if (s.mood) setMood(s.mood);
+      } catch(e) {}
+    }
+
     async function saveStats() {
       const alertEl = document.getElementById('alert-area');
-
+      const walkKm = walkInputMode === 'km' ? parseFloat(document.getElementById('walk-km').value) || null : null;
+      const steps = walkInputMode === 'steps' ? parseInt(document.getElementById('steps').value) || null : null;
       const weight = parseFloat(document.getElementById('weight').value) || null;
-      const walkKm = walkInputMode === 'km'
-        ? parseFloat(document.getElementById('walk-km').value) || null
-        : null;
-      const steps = walkInputMode === 'steps'
-        ? parseInt(document.getElementById('steps').value) || null
-        : null;
+      const manualWater = parseFloat(document.getElementById('water-ml').value) || 0;
+      const totalWater = currentWaterMl + manualWater;
 
       const payload = { date: document.getElementById('log-date').value };
-
       if (weight !== null) payload.weight_kg = weight;
       if (walkKm !== null) payload.walk_km = walkKm;
       if (steps !== null) payload.steps = steps;
-
       if (gymDone !== null) {
         payload.gym_done = gymDone;
         if (gymDone) {
           const mins = parseInt(document.getElementById('gym-mins').value) || null;
-          const intensity = document.getElementById('gym-intensity').value;
           if (mins) payload.gym_mins = mins;
-          if (intensity) payload.gym_intensity = intensity;
+          payload.gym_intensity = document.getElementById('gym-intensity').value;
         }
       }
+      if (isRestDay !== null) {
+        payload.is_rest_day = isRestDay;
+        if (isRestDay) payload.rest_day_reason = document.getElementById('rest-reason').value;
+      }
+      if (totalWater > 0) payload.water_ml = totalWater;
+      const sleepHours = parseFloat(document.getElementById('sleep-hours').value) || null;
+      const sleepQuality = document.getElementById('sleep-quality').value || null;
+      if (sleepHours) payload.sleep_hours = sleepHours;
+      if (sleepQuality) payload.sleep_quality = sleepQuality;
+      if (selectedMood) payload.mood = selectedMood;
 
       try {
         await API.post('/stats/log', payload);
         alertEl.innerHTML = '<div class="alert alert-success">Stats saved successfully.</div>';
+        document.getElementById('water-ml').value = '';
         setTimeout(() => alertEl.innerHTML = '', 3000);
         loadRecent();
       } catch(e) {
@@ -175,89 +337,54 @@
     }
 
     async function loadRecent() {
-  const tbody = document.getElementById('stats-tbody');
-  tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">Loading...</td></tr>';
-
-  try {
-    const days = [];
-    const cur = new Date();
-    cur.setDate(cur.getDate() - 6);
-    for (let i = 0; i < 7; i++) {
-      days.push(cur.toISOString().split('T')[0]);
-      cur.setDate(cur.getDate() + 1);
+      const tbody = document.getElementById('stats-tbody');
+      tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text3)">Loading...</td></tr>`;
+      try {
+        const days = [];
+        const cur = new Date();
+        cur.setDate(cur.getDate() - 6);
+        for (let i = 0; i < 7; i++) {
+          days.push(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+        const summaries = await Promise.all(
+          days.map(d => API.get(`/summary/daily/${d}`).catch(() => null))
+        );
+        const rows = summaries.filter(Boolean).reverse();
+        const loggedRows = rows.filter(r => r.stats_logged);
+        if (!loggedRows.length) {
+          tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text3)">No stats logged yet.</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = rows.map(s => {
+          if (!s.stats_logged) return '';
+          const defVal = s.deficit;
+          const defStr = defVal != null
+            ? `<span style="color:${defVal > 0 ? 'var(--accent)' : 'var(--danger)'}">${defVal > 0 ? '−' : '+'}${Math.abs(Math.round(defVal))}</span>`
+            : '—';
+          const moodEmoji = { great:'😄', good:'🙂', okay:'😐', tired:'😴', stressed:'😰', bad:'😞' };
+          return `<tr>
+            <td style="font-family:'DM Mono',monospace;font-size:11px">${s.date}</td>
+            <td>${s.weight_kg != null ? s.weight_kg + ' kg' : '—'}</td>
+            <td>${s.walk_km != null ? s.walk_km + ' km' : '—'}</td>
+            <td>${s.walk_cals != null ? Math.round(s.walk_cals) : '—'}</td>
+            <td>${s.is_rest_day ? '🛌 Rest' : s.gym_done ? s.gym_mins + 'min' : '—'}</td>
+            <td>${s.water_ml ? s.water_ml + ' ml' : '—'}</td>
+            <td>${s.sleep_hours ? s.sleep_hours + 'h' + (s.sleep_quality ? ' · ' + s.sleep_quality : '') : '—'}</td>
+            <td>${s.mood ? (moodEmoji[s.mood] || s.mood) : '—'}</td>
+            <td>${s.tdee != null ? Math.round(s.tdee) : '—'}</td>
+            <td>${defStr}</td>
+          </tr>`;
+        }).filter(Boolean).join('');
+        if (!tbody.innerHTML.trim()) {
+          tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text3)">No stats logged yet.</td></tr>`;
+        }
+      } catch(e) { console.error(e); }
     }
 
-    const summaries = await Promise.all(
-      days.map(d => API.get(`/summary/daily/${d}`).catch(() => null))
-    );
-
-    const rows = summaries.filter(Boolean).reverse();
-    const loggedRows = rows.filter(r => r.stats_logged);
-
-    if (!loggedRows.length) {
-      tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">No stats logged yet.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = rows.map(s => {
-      if (!s.stats_logged) return '';
-
-      const defVal = s.deficit;
-      let defStr = '—';
-      if (defVal != null) {
-        const color = defVal > 0 ? 'var(--accent)' : 'var(--danger)';
-        const sign = defVal > 0 ? '−' : '+';
-        defStr = `<span style="color:${color}">${sign}${Math.abs(Math.round(defVal))}</span>`;
-      }
-
-      const gymStr = s.gym_done
-        ? `${s.gym_mins}min · ${s.gym_intensity}`
-        : 'Rest';
-
-      return `<tr>
-        <td style="font-family:'DM Mono',monospace">${s.date}</td>
-        <td>${s.weight_kg != null ? s.weight_kg + ' kg' : '—'}</td>
-        <td>${s.walk_km != null ? s.walk_km + ' km' : '—'}</td>
-        <td>${s.walk_cals != null ? Math.round(s.walk_cals) : '—'}</td>
-        <td>${gymStr}</td>
-        <td>${s.gym_done && s.gym_cals != null ? Math.round(s.gym_cals) : '—'}</td>
-        <td>${s.tdee != null ? Math.round(s.tdee) : '—'}</td>
-        <td>${s.total_calories > 0 ? Math.round(s.total_calories) : '—'}</td>
-        <td>${defStr}</td>
-      </tr>`;
-    }).filter(Boolean).join('');
-
-    if (!tbody.innerHTML.trim()) {
-      tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">No stats logged yet.</td></tr>';
-    }
-
-  } catch(e) {
-    console.error('loadRecent error:', e);
-    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text3)">Error loading stats.</td></tr>';
-  }
-}
-
-//     async function loadTodayStats() {
-//   try {
-//     const s = await API.get(`/stats/${today()}`);
-//     if (s.weight_kg) document.getElementById('weight').value = s.weight_kg;
-//     if (s.walk_km) {
-//       setWalkInput('km');
-//       document.getElementById('walk-km').value = s.walk_km;
-//     } else if (s.steps) {
-//       setWalkInput('steps');
-//       document.getElementById('steps').value = s.steps;
-//     }
-//     if (s.gym_done) {
-//       setGym(true);
-//       if (s.gym_mins) document.getElementById('gym-mins').value = s.gym_mins;
-//       if (s.gym_intensity) document.getElementById('gym-intensity').value = s.gym_intensity;
-//     }
-//   } catch(e) {}
-// }
-
-// loadTodayStats();
-loadRecent();
+    loadGoals();
+    loadTodayStats();
+    loadRecent();
   </script>
 </body>
 </html>

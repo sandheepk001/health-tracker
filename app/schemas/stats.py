@@ -17,6 +17,12 @@ class StatsCreate(BaseModel):
     gym_mins: Optional[int] = None
     gym_intensity: Optional[IntensityEnum] = None
     is_fasting: Optional[bool] = None
+    water_ml: Optional[float] = None
+    sleep_hours: Optional[float] = None
+    sleep_quality: Optional[str] = None
+    is_rest_day: Optional[bool] = None
+    rest_day_reason: Optional[str] = None
+    mood: Optional[str] = None
 
 class StatsOut(StatsCreate):
     id: int

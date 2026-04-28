@@ -112,6 +112,10 @@
             <div>
               <div class="selected-name" id="sel-name"></div>
               <div class="selected-meta" id="sel-meta"></div>
+              <button id="save-to-db-btn" class="hidden btn btn-secondary btn-sm"
+                style="margin-top:6px" onclick="saveOFFtoLocal()">
+                Save to local database
+              </button>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="clearSelected()">Change</button>
           </div>
@@ -179,6 +183,47 @@
         <div style="font-size:13px;color:var(--text3)">No entries yet.</div>
       </div>
     </div>
+    <!-- TEMPLATES -->
+    <div class="card">
+      <div class="card-label">Meal templates</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:1rem">
+        <button class="btn btn-secondary btn-sm" onclick="toggleTemplatePanel('use')">Use template</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleTemplatePanel('save')">Save current meal as template</button>
+      </div>
+
+      <!-- USE TEMPLATE -->
+      <div id="use-template-panel" class="hidden">
+        <div id="template-list" style="margin-bottom:1rem">
+          <div style="font-size:13px;color:var(--text3)">Loading templates...</div>
+        </div>
+      </div>
+
+      <!-- SAVE AS TEMPLATE -->
+      <div id="save-template-panel" class="hidden">
+        <div class="grid-2" style="margin-bottom:10px">
+          <div class="field">
+            <label>Template name</label>
+            <input type="text" id="template-name" placeholder="e.g. My usual breakfast"/>
+          </div>
+          <div class="field">
+            <label>Based on meal</label>
+            <select id="template-meal-type">
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+            </select>
+          </div>
+        </div>
+        <div id="template-items-preview" style="margin-bottom:10px;font-size:13px;color:var(--text2)">
+          Select a date's food log to save as template.
+        </div>
+        <button class="btn btn-accent btn-sm" style="width:auto;padding:0 16px" onclick="saveAsTemplate()">
+          Save template
+        </button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -187,7 +232,158 @@
     let selectedFood = null;
     let selectedMeal = 'breakfast';
     let searchTimer = null;
+    let templatePanelOpen = null;
+    let userTemplates = [];
 
+    function toggleTemplatePanel(panel) {
+      if (templatePanelOpen === panel) {
+        document.getElementById('use-template-panel').classList.add('hidden');
+        document.getElementById('save-template-panel').classList.add('hidden');
+        templatePanelOpen = null;
+        return;
+      }
+      templatePanelOpen = panel;
+      document.getElementById('use-template-panel').classList.toggle('hidden', panel !== 'use');
+      document.getElementById('save-template-panel').classList.toggle('hidden', panel !== 'save');
+      if (panel === 'use') loadTemplates();
+      if (panel === 'save') loadTemplatePreview();
+    }
+
+    async function loadTemplates() {
+      try {
+        userTemplates = await API.get('/templates');
+        const el = document.getElementById('template-list');
+        if (!userTemplates.length) {
+          el.innerHTML = '<div style="font-size:13px;color:var(--text3)">No templates saved yet.</div>';
+          return;
+        }
+        el.innerHTML = userTemplates.map(t => `
+          <div style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div>
+                <div style="font-weight:600;font-size:13px">${t.name}</div>
+                <div style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace">
+                  ${t.meal_type} · ${Math.round(t.total_calories || 0)} kcal · ${t.items.length} items
+                </div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-accent btn-sm" onclick="useTemplate(${t.id})">Use</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})">✕</button>
+              </div>
+            </div>
+            <div id="template-edit-${t.id}" class="hidden">
+              ${t.items.map((item, i) => `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
+                  <span style="flex:1;color:var(--text2)">${item.food_name}</span>
+                  <input type="number" value="${item.quantity}" step="1" min="1"
+                    style="width:70px;height:28px;padding:0 6px;font-family:'DM Mono',monospace;font-size:12px;
+                      border:0.5px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--text)"
+                    id="tpl-qty-${t.id}-${i}" data-food-id="${item.food_id}" data-unit="${item.unit}"/>
+                  <span style="color:var(--text3)">${item.unit}</span>
+                </div>`).join('')}
+              <button class="btn btn-accent btn-sm" style="width:100%;margin-top:6px"
+                onclick="logTemplateWithEdits(${t.id}, ${t.items.length})">
+                Confirm & log
+              </button>
+            </div>
+          </div>`).join('');
+      } catch(e) {}
+    }
+
+    function useTemplate(templateId) {
+      const editDiv = document.getElementById(`template-edit-${templateId}`);
+      editDiv.classList.toggle('hidden');
+    }
+
+    async function logTemplateWithEdits(templateId, itemCount) {
+      const template = userTemplates.find(t => t.id === templateId);
+      if (!template) return;
+
+      const items = template.items.map((item, i) => ({
+        food_id: item.food_id,
+        quantity: parseFloat(document.getElementById(`tpl-qty-${templateId}-${i}`).value) || item.quantity,
+        unit: item.unit
+      }));
+
+      try {
+        await API.post('/templates/log', {
+          date: document.getElementById('log-date').value,
+          meal_type: template.meal_type,
+          items
+        });
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-success">Template "${template.name}" logged.</div>`;
+        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+        loadTodayLog();
+        document.getElementById('use-template-panel').classList.add('hidden');
+        templatePanelOpen = null;
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function loadTemplatePreview() {
+      const date = document.getElementById('log-date').value;
+      const meal = document.getElementById('template-meal-type').value;
+      try {
+        const logs = await API.get(`/food-log/${date}`);
+        const filtered = logs.filter(l => l.meal_type === meal);
+        if (!filtered.length) {
+          document.getElementById('template-items-preview').textContent =
+            `No ${meal} entries for ${date} to save.`;
+          return;
+        }
+        document.getElementById('template-items-preview').innerHTML =
+          filtered.map(l => `<div style="padding:4px 0">${l.food_name || 'Food #' + l.food_id} · ${l.quantity}${l.unit}</div>`).join('');
+      } catch(e) {}
+    }
+
+    async function saveAsTemplate() {
+      const name = document.getElementById('template-name').value.trim();
+      const meal = document.getElementById('template-meal-type').value;
+      const date = document.getElementById('log-date').value;
+      if (!name) {
+        document.getElementById('alert-area').innerHTML =
+          '<div class="alert alert-danger">Please enter a template name.</div>';
+        return;
+      }
+      try {
+        const logs = await API.get(`/food-log/${date}`);
+        const filtered = logs.filter(l => l.meal_type === meal);
+        if (!filtered.length) {
+          document.getElementById('alert-area').innerHTML =
+            '<div class="alert alert-danger">No food entries found for this meal.</div>';
+          return;
+        }
+        await API.post('/templates', {
+          name,
+          meal_type: meal,
+          items: filtered.map(l => ({
+            food_id: l.food_id,
+            quantity: l.quantity,
+            unit: l.unit
+          }))
+        });
+        document.getElementById('template-name').value = '';
+        document.getElementById('save-template-panel').classList.add('hidden');
+        templatePanelOpen = null;
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-success">Template "${name}" saved.</div>`;
+        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function deleteTemplate(id) {
+      if (!confirm('Delete this template?')) return;
+      try {
+        await API.delete(`/templates/${id}`);
+        loadTemplates();
+      } catch(e) {}
+    }
     document.getElementById('log-date').value = today();
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -267,20 +463,27 @@
             document.getElementById('add-new-toggle').classList.remove('hidden');
             return;
           }
-          el.innerHTML = results.map(f => `
-            <div class="search-result-item" data-food='${JSON.stringify(f).replace(/'/g, "&#39;")}'>
+          el.innerHTML = results.map(f => {
+            const isOFF = f.from_off;
+            return `<div class="search-result-item" data-food='${JSON.stringify(f).replace(/'/g, "&#39;")}'>
               <div>
-                <div class="result-name">${f.name}</div>
+                <div class="result-name">${f.name} ${isOFF ? '<span style="font-size:10px;color:var(--text3);border:0.5px solid var(--border2);border-radius:4px;padding:1px 5px;margin-left:4px">OFF</span>' : ''}</div>
                 <div class="result-meta">per 100${f.unit || 'g'} · P:${f.protein_per_100g}g · C:${f.carbs_per_100g}g · F:${f.fat_per_100g}g</div>
               </div>
               <div class="result-cal">${f.calories_per_100g} kcal</div>
-            </div>`).join('');
+            </div>`;
+          }).join('');
 
           // attach click handlers after rendering
           el.querySelectorAll('.search-result-item').forEach(item => {
             item.addEventListener('click', () => {
               const f = JSON.parse(item.dataset.food.replace(/&#39;/g, "'"));
-              selectFood(f.id, f.name, f.unit || 'g', f.calories_per_100g, f.protein_per_100g, f.carbs_per_100g, f.fat_per_100g, f.fiber_per_100g);
+              selectFood(
+                f.id, f.name, f.unit || 'g',
+                f.calories_per_100g, f.protein_per_100g,
+                f.carbs_per_100g, f.fat_per_100g,
+                f.fiber_per_100g, f.from_off || false
+              );
             });
           });
           el.classList.remove('hidden');
@@ -290,21 +493,27 @@
       }, 300);
     }
 
-    function selectFood(id, name, unit, cal, protein, carbs, fat, fiber) {
-      selectedFood = { id, name, unit, cal, protein, carbs, fat, fiber };
+    function selectFood(id, name, unit, cal, protein, carbs, fat, fiber, fromOFF) {
+      selectedFood = { id, name, unit, cal, protein, carbs, fat, fiber, fromOFF };
       document.getElementById('sel-name').textContent = name;
       document.getElementById('sel-meta').textContent =
         `${cal} kcal · P:${protein}g · C:${carbs}g · F:${fat}g per 100${unit}`;
+      document.getElementById('quantity-label').textContent = `Quantity (${unit})`;
+
+      // show save to DB option for OFF results
+      const saveBtn = document.getElementById('save-to-db-btn');
+      if (fromOFF && saveBtn) {
+        saveBtn.classList.remove('hidden');
+      } else if (saveBtn) {
+        saveBtn.classList.add('hidden');
+      }
+
       document.getElementById('selected-food').classList.remove('hidden');
       document.getElementById('search-results').classList.add('hidden');
       document.getElementById('add-new-toggle').classList.add('hidden');
       document.getElementById('food-search').value = '';
-      // update quantity label to show correct unit
-      document.querySelector('label[for="quantity"]') &&
-        (document.querySelector('label[for="quantity"]').textContent = `Quantity (${unit})`);
-      document.getElementById('quantity').placeholder = `e.g. 250`;
+      document.getElementById('quantity').placeholder = 'e.g. 250';
       document.getElementById('quantity').value = '100';
-      document.getElementById('quantity-label').textContent = `Quantity (${unit})`;
       previewMacros();
     }
 
@@ -378,7 +587,30 @@
           `<div class="alert alert-danger">${e.message}</div>`;
       }
     }
-
+    async function saveOFFtoLocal() {
+      if (!selectedFood) return;
+      try {
+        const saved = await API.post('/foods', {
+          name: selectedFood.name,
+          unit: selectedFood.unit || 'g',
+          calories_per_100g: selectedFood.cal,
+          protein_per_100g: selectedFood.protein,
+          carbs_per_100g: selectedFood.carbs,
+          fat_per_100g: selectedFood.fat,
+          fiber_per_100g: selectedFood.fiber || 0
+        });
+        selectedFood.id = saved.id;
+        selectedFood.fromOFF = false;
+        document.getElementById('save-to-db-btn').classList.add('hidden');
+        document.getElementById('alert-area').innerHTML =
+          '<div class="alert alert-success">Saved to local database.</div>';
+        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+      } catch(e) {
+        // food might already exist locally
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-warn">⚠ ${e.message}</div>`;
+      }
+    }
     async function deleteLog(id) {
       try {
         await API.delete(`/food-log/${id}`);

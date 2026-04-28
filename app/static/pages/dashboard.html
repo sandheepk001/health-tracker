@@ -90,7 +90,36 @@
         </div>
       </div>
     </div>
-
+    <!-- GOALS PROGRESS -->
+    <div class="card">
+      <div class="card-label">Today's goals</div>
+      <div class="metrics-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
+        <div class="metric-card">
+          <div class="metric-label">Calorie goal</div>
+          <div class="metric-val" id="goal-cal-val">—</div>
+          <div class="metric-unit" id="goal-cal-unit">kcal</div>
+          <div style="height:4px;border-radius:2px;background:var(--border);margin-top:8px;overflow:hidden">
+            <div id="goal-cal-bar" style="height:100%;border-radius:2px;background:#EF9F27;width:0%;transition:width 0.4s"></div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Water</div>
+          <div class="metric-val" id="goal-water-val">—</div>
+          <div class="metric-unit" id="goal-water-unit">ml</div>
+          <div style="height:4px;border-radius:2px;background:var(--border);margin-top:8px;overflow:hidden">
+            <div id="goal-water-bar" style="height:100%;border-radius:2px;background:#378ADD;width:0%;transition:width 0.4s"></div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Steps</div>
+          <div class="metric-val" id="goal-steps-val">—</div>
+          <div class="metric-unit" id="goal-steps-unit">steps</div>
+          <div style="height:4px;border-radius:2px;background:var(--border);margin-top:8px;overflow:hidden">
+            <div id="goal-steps-bar" style="height:100%;border-radius:2px;background:var(--accent);width:0%;transition:width 0.4s"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 <!-- ACTIVITY -->
 <div class="card">
   <div class="card-label">Activity today</div>
@@ -214,7 +243,30 @@ async function loadDashboard() {
         targetEl.textContent = '';
       }
     });
+    // goals progress
+    const calGoal = user.daily_calorie_goal;
+    const waterGoal = user.daily_water_goal || 2500;
+    const stepsGoal = user.daily_steps_goal || 10000;
 
+    if (calGoal) {
+      const calPct = Math.min((summary.total_calories / calGoal) * 100, 100);
+      document.getElementById('goal-cal-val').textContent = Math.round(summary.total_calories);
+      document.getElementById('goal-cal-unit').textContent = `/ ${calGoal} kcal goal`;
+      document.getElementById('goal-cal-bar').style.width = calPct + '%';
+      document.getElementById('goal-cal-bar').style.background = calPct > 100 ? 'var(--danger)' : '#EF9F27';
+    }
+
+    const waterMl = summary.water_ml || 0;
+    const waterPct = Math.min((waterMl / waterGoal) * 100, 100);
+    document.getElementById('goal-water-val').textContent = waterMl;
+    document.getElementById('goal-water-unit').textContent = `/ ${waterGoal} ml goal`;
+    document.getElementById('goal-water-bar').style.width = waterPct + '%';
+
+    const steps = summary.steps || 0;
+    const stepsPct = Math.min((steps / stepsGoal) * 100, 100);
+    document.getElementById('goal-steps-val').textContent = steps ? steps.toLocaleString() : '—';
+    document.getElementById('goal-steps-unit').textContent = steps ? `/ ${stepsGoal.toLocaleString()} goal` : 'not logged';
+    document.getElementById('goal-steps-bar').style.width = stepsPct + '%';
     // activity — distinguish not logged vs logged
     // activity
 if (!summary.stats_logged) {

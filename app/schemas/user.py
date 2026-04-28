@@ -31,6 +31,9 @@ class UserOut(BaseModel):
     target_carbs: Optional[float] = None
     target_fat: Optional[float] = None
     target_fiber: Optional[float] = None
+    daily_calorie_goal: Optional[float] = None
+    daily_water_goal: Optional[float] = 2500
+    daily_steps_goal: Optional[int] = 10000
 
     class Config:
         from_attributes = True
@@ -44,3 +47,6 @@ class UserUpdate(BaseModel):
     target_carbs: Optional[float] = None
     target_fat: Optional[float] = None
     target_fiber: Optional[float] = None
+    daily_calorie_goal: Optional[float] = None
+    daily_water_goal: Optional[float] = None
+    daily_steps_goal: Optional[int] = None

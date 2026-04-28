@@ -4,8 +4,8 @@ from email.mime.text import MIMEText
 # Email details
 sender = "sandheepk27@gmail.com"
 receiver = "shanmathi0518@gmail.com"
-password = "cuqigbhxcadsyjht"  # NOT your real password!
-
+# password = "cuqigbhxcadsyjht"  # NOT your real password!
+password = "orfi krwx vpub ujqn"
 # Create message
 msg = MIMEText("Hello! This is a test email sent from Python.")
 msg["Subject"] = "Test Email"

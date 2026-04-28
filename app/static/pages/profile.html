@@ -84,6 +84,11 @@
         <div class="read-row"><span class="read-label">Height</span><span class="read-val" id="r-height">—</span></div>
         <div class="read-row"><span class="read-label">Initial weight</span><span class="read-val" id="r-initial-weight">—</span></div>
         <div class="divider"></div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Daily goals</div>
+        <div class="read-row"><span class="read-label">Calorie goal</span><span class="read-val" id="r-cal-goal">—</span></div>
+        <div class="read-row"><span class="read-label">Water goal</span><span class="read-val" id="r-water-goal">—</span></div>
+        <div class="read-row"><span class="read-label">Steps goal</span><span class="read-val" id="r-steps-goal">—</span></div>
+        <div class="divider"></div>
         <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Daily macro targets</div>
         <div class="read-row"><span class="read-label">Protein</span><span class="read-val" id="r-target-protein">—</span></div>
         <div class="read-row"><span class="read-label">Carbs</span><span class="read-val" id="r-target-carbs">—</span></div>
@@ -114,6 +119,24 @@
         </div>
         <div class="section-sub" style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin:1rem 0 0.75rem;padding-top:1rem;border-top:0.5px solid var(--border)">
           Daily macro targets
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+          color:var(--text3);margin:1rem 0 0.5rem;padding-top:1rem;border-top:0.5px solid var(--border)">
+          Daily goals
+        </div>
+        <div class="grid-3">
+          <div class="field">
+            <label>Calorie goal (kcal)</label>
+            <input type="number" id="e-cal-goal" step="50" placeholder="e.g. 1800"/>
+          </div>
+          <div class="field">
+            <label>Water goal (ml)</label>
+            <input type="number" id="e-water-goal" step="100" placeholder="e.g. 2500"/>
+          </div>
+          <div class="field">
+            <label>Steps goal</label>
+            <input type="number" id="e-steps-goal" step="500" placeholder="e.g. 10000"/>
+          </div>
         </div>
         <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
           These are soft targets — tracking continues beyond them.
@@ -216,7 +239,9 @@
       document.getElementById('read-mode').classList.add('hidden');
       document.getElementById('edit-mode').classList.remove('hidden');
       document.getElementById('edit-btn').classList.add('hidden');
-
+      document.getElementById('e-cal-goal').value = currentUser.daily_calorie_goal || '';
+      document.getElementById('e-water-goal').value = currentUser.daily_water_goal || 2500;
+      document.getElementById('e-steps-goal').value = currentUser.daily_steps_goal || 10000;
       document.getElementById('e-name').value = currentUser.name || '';
       document.getElementById('e-age').value = currentUser.age || '';
       document.getElementById('e-height').value = currentUser.height_cm || '';
@@ -251,6 +276,9 @@
         document.getElementById('r-gender').textContent = user.gender;
         document.getElementById('r-age').textContent = user.age + ' years';
         document.getElementById('r-height').textContent = user.height_cm + ' cm';
+        document.getElementById('r-cal-goal').textContent = user.daily_calorie_goal ? user.daily_calorie_goal + ' kcal' : '—';
+        document.getElementById('r-water-goal').textContent = user.daily_water_goal ? user.daily_water_goal + ' ml' : '—';
+        document.getElementById('r-steps-goal').textContent = user.daily_steps_goal ? user.daily_steps_goal.toLocaleString() + ' steps' : '—';
         document.getElementById('r-initial-weight').textContent =
           user.initial_weight ? user.initial_weight + ' kg' : '—';
       } catch(e) {}
@@ -315,68 +343,68 @@ async function loadWeightHistory() {
 }
 
     function renderChart(data) {
-  const labels = data.map(d => d.isInitial ? d.date + ' (initial)' : d.date);
-  const weights = data.map(d => d.weight_kg);
-  const pointColors = data.map(d => d.isInitial ? '#EF9F27' : '#1D9E75');
-  const pointRadius = data.map(d => d.isInitial ? 7 : 5);
+      const labels = data.map(d => d.isInitial ? d.date + ' (initial)' : d.date);
+      const weights = data.map(d => d.weight_kg);
+      const pointColors = data.map(d => d.isInitial ? '#EF9F27' : '#1D9E75');
+      const pointRadius = data.map(d => d.isInitial ? 7 : 5);
 
-  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-  const tickColor = isDark ? '#6b6a66' : '#9e9d99';
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      const tickColor = isDark ? '#6b6a66' : '#9e9d99';
 
-  if (chartInstance) chartInstance.destroy();
-  chartInstance = new Chart(document.getElementById('weight-chart'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Weight (kg)',
-        data: weights,
-        borderColor: '#1D9E75',
-        backgroundColor: 'rgba(29,158,117,0.07)',
-        borderWidth: 2.5,
-        pointBackgroundColor: pointColors,
-        pointRadius: pointRadius,
-        pointHoverRadius: 7,
-        fill: true,
-        tension: 0.35
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: isDark ? '#1c1c1a' : '#fff',
-          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-          borderWidth: 1,
-          titleColor: isDark ? '#f0ede8' : '#1a1a18',
-          bodyColor: isDark ? '#9e9d99' : '#6b6a66',
-          padding: 10,
-          callbacks: {
-            label: ctx => {
-              const d = data[ctx.dataIndex];
-              return d.isInitial
-                ? ` ${ctx.parsed.y.toFixed(2)} kg (initial weight)`
-                : ` ${ctx.parsed.y.toFixed(2)} kg`;
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(document.getElementById('weight-chart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Weight (kg)',
+            data: weights,
+            borderColor: '#1D9E75',
+            backgroundColor: 'rgba(29,158,117,0.07)',
+            borderWidth: 2.5,
+            pointBackgroundColor: pointColors,
+            pointRadius: pointRadius,
+            pointHoverRadius: 7,
+            fill: true,
+            tension: 0.35
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: isDark ? '#1c1c1a' : '#fff',
+              borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+              borderWidth: 1,
+              titleColor: isDark ? '#f0ede8' : '#1a1a18',
+              bodyColor: isDark ? '#9e9d99' : '#6b6a66',
+              padding: 10,
+              callbacks: {
+                label: ctx => {
+                  const d = data[ctx.dataIndex];
+                  return d.isInitial
+                    ? ` ${ctx.parsed.y.toFixed(2)} kg (initial weight)`
+                    : ` ${ctx.parsed.y.toFixed(2)} kg`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, maxTicksLimit: 10 }
+            },
+            y: {
+              grid: { color: gridColor },
+              ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, callback: v => v.toFixed(1) + ' kg' }
             }
           }
         }
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, maxTicksLimit: 10 }
-        },
-        y: {
-          grid: { color: gridColor },
-          ticks: { color: tickColor, font: { family: 'DM Mono', size: 11 }, callback: v => v.toFixed(1) + ' kg' }
-        }
-      }
+      });
     }
-  });
-}
 
     function renderList(visibleData, hidden, allData) {
       const reversed = [...visibleData].reverse();
@@ -452,6 +480,9 @@ async function loadWeightHistory() {
           target_carbs: parseFloat(document.getElementById('e-target-carbs').value) || null,
           target_fat: parseFloat(document.getElementById('e-target-fat').value) || null,
           target_fiber: parseFloat(document.getElementById('e-target-fiber').value) || null,
+          daily_calorie_goal: parseFloat(document.getElementById('e-cal-goal').value) || null,
+          daily_water_goal: parseFloat(document.getElementById('e-water-goal').value) || 2500,
+          daily_steps_goal: parseInt(document.getElementById('e-steps-goal').value) || 10000,
         });
         exitEditMode();
         alertEl.innerHTML = '<div class="alert alert-success">Profile updated.</div>';

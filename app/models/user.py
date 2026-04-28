@@ -22,6 +22,9 @@ class User(Base):
     target_carbs = Column(Float, nullable=True)
     target_fat = Column(Float, nullable=True)
     target_fiber = Column(Float, nullable=True)
+    daily_calorie_goal = Column(Float, nullable=True)
+    daily_water_goal = Column(Float, default=2500)
+    daily_steps_goal = Column(Integer, default=10000)
 
     stats = relationship("UserStats", back_populates="user")
     food_logs = relationship("FoodLog", back_populates="user")

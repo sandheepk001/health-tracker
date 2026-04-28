@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Workout — Health Tracker</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+    .section-sub { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin: 1rem 0 0.75rem; padding-top: 1rem; border-top: 0.5px solid var(--border); }
+
+    .category-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .cat-tab { height: 30px; padding: 0 12px; font-size: 11px; font-weight: 600; border: 0.5px solid var(--border2); border-radius: 20px; background: transparent; color: var(--text2); cursor: pointer; transition: all 0.15s; font-family: 'Syne', sans-serif; }
+    .cat-tab.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+    .exercise-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 300px; overflow-y: auto; margin-bottom: 1rem; }
+    .exercise-item { padding: 10px 12px; border: 0.5px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: all 0.15s; font-size: 13px; }
+    .exercise-item:hover { border-color: var(--accent); background: var(--surface2); }
+    .exercise-item.selected { border-color: var(--accent); background: rgba(29,158,117,0.08); }
+    .exercise-name { font-weight: 500; }
+    .exercise-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+    .set-row { display: grid; grid-template-columns: 40px 1fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+    .set-row:last-child { border-bottom: none; }
+    .set-num { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--text3); text-align: center; }
+    .set-input { height: 32px; padding: 0 8px; font-family: 'DM Mono', monospace; font-size: 12px; border: 0.5px solid var(--border2); border-radius: 6px; background: var(--surface2); color: var(--text); outline: none; width: 100%; }
+    .set-input:focus { border-color: var(--accent); }
+
+    .session-card { background: var(--surface2); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+    .session-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .session-name { font-weight: 600; font-size: 14px; }
+    .session-meta { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; margin-top: 2px; }
+    .exercise-group { margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--border); }
+    .exercise-group-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); margin-bottom: 6px; }
+    .set-summary-row { display: flex; gap: 12px; font-size: 12px; font-family: 'DM Mono', monospace; padding: 4px 0; color: var(--text); }
+    .set-summary-num { color: var(--text3); min-width: 40px; }
+  </style>
+</head>
+<body>
+  <script src="/static/js/api.js"></script>
+  <script>requireAuth();</script>
+  <script src="/static/js/nav.js"></script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Workout log</h1>
+      <p id="date-label"></p>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <!-- NEW SESSION -->
+    <div class="card" id="new-session-card">
+      <div class="card-label">Log workout</div>
+
+      <div class="grid-2" style="margin-bottom:12px">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="session-date"/>
+        </div>
+        <div class="field">
+          <label>Session name (optional)</label>
+          <input type="text" id="session-name" placeholder="e.g. Push Day, Leg Day"/>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Is this a rest day?</label>
+        <div class="toggle">
+          <button class="active" id="btn-sess-rest-no" onclick="setSessionRest(false)">Workout</button>
+          <button id="btn-sess-rest-yes" onclick="setSessionRest(true)">Rest day</button>
+        </div>
+      </div>
+
+      <div id="workout-fields">
+        <div class="grid-2" style="margin-top:12px">
+          <div class="field">
+            <label>Duration (mins)</label>
+            <input type="number" id="session-duration" placeholder="60"/>
+          </div>
+          <div class="field">
+            <label>Overall intensity</label>
+            <select id="session-intensity">
+              <option value="light">Light</option>
+              <option value="moderate" selected>Moderate</option>
+              <option value="intense">Intense</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section-sub">Select exercise</div>
+        <div class="field">
+          <label>Filter by category</label>
+          <div class="category-tabs" id="category-tabs">
+            <button class="cat-tab active" onclick="filterCategory('all')">All</button>
+            <button class="cat-tab" onclick="filterCategory('chest')">Chest</button>
+            <button class="cat-tab" onclick="filterCategory('back')">Back</button>
+            <button class="cat-tab" onclick="filterCategory('legs')">Legs</button>
+            <button class="cat-tab" onclick="filterCategory('shoulders')">Shoulders</button>
+            <button class="cat-tab" onclick="filterCategory('arms')">Arms</button>
+            <button class="cat-tab" onclick="filterCategory('core')">Core</button>
+            <button class="cat-tab" onclick="filterCategory('cardio')">Cardio</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Search exercise</label>
+          <input type="text" id="exercise-search" placeholder="e.g. bench press" oninput="filterExercises()"/>
+        </div>
+
+        <div class="exercise-list" id="exercise-list">
+          <div style="color:var(--text3);font-size:13px;grid-column:1/-1">Loading exercises...</div>
+        </div>
+
+        <!-- SETS LOGGER -->
+        <div id="sets-section" class="hidden">
+          <div class="section-sub">Log sets — <span id="selected-exercise-name" style="color:var(--accent)"></span></div>
+          <div id="sets-container"></div>
+          <button class="btn btn-secondary" style="margin-top:8px;width:auto;padding:0 14px;height:34px;font-size:12px"
+            onclick="addSetRow()">+ Add set</button>
+        </div>
+
+        <div class="field" style="margin-top:1rem">
+          <label>Notes (optional)</label>
+          <input type="text" id="session-notes" placeholder="How did it go?"/>
+        </div>
+      </div>
+
+      <div id="rest-day-note" class="hidden">
+        <div style="background:var(--surface2);border-radius:var(--radius);padding:14px;margin-top:12px;font-size:13px;color:var(--text2)">
+          🛌 Rest day logged — recovery is part of progress.
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="margin-top:1rem" onclick="saveSession()">Save session</button>
+    </div>
+
+    <!-- ADD CUSTOM EXERCISE -->
+    <div class="card">
+      <div class="card-label">Add custom exercise</div>
+      <div class="grid-3">
+        <div class="field">
+          <label>Exercise name</label>
+          <input type="text" id="custom-name" placeholder="e.g. Zercher Squat"/>
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="custom-category">
+            <option value="chest">Chest</option>
+            <option value="back">Back</option>
+            <option value="legs">Legs</option>
+            <option value="shoulders">Shoulders</option>
+            <option value="arms">Arms</option>
+            <option value="core">Core</option>
+            <option value="cardio">Cardio</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Equipment</label>
+          <select id="custom-equipment">
+            <option value="barbell">Barbell</option>
+            <option value="dumbbell">Dumbbell</option>
+            <option value="machine">Machine</option>
+            <option value="cable">Cable</option>
+            <option value="bodyweight">Bodyweight</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="width:auto;padding:0 20px" onclick="addCustomExercise()">Add exercise</button>
+    </div>
+
+    <!-- RECENT SESSIONS -->
+    <div class="card">
+      <div class="card-label">Recent sessions</div>
+      <div id="recent-sessions">
+        <div style="font-size:13px;color:var(--text3)">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    renderNav('workout');
+
+    let allExercises = [];
+    let selectedExercise = null;
+    let currentCategory = 'all';
+    let isSessionRest = false;
+    let setRows = [];
+
+    document.getElementById('session-date').value = today();
+    document.getElementById('date-label').textContent = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    function setSessionRest(val) {
+      isSessionRest = val;
+      document.getElementById('btn-sess-rest-no').classList.toggle('active', !val);
+      document.getElementById('btn-sess-rest-yes').classList.toggle('active', val);
+      document.getElementById('workout-fields').classList.toggle('hidden', val);
+      document.getElementById('rest-day-note').classList.toggle('hidden', !val);
+    }
+
+    async function loadExercises() {
+      try {
+        allExercises = await API.get('/workout/exercises');
+        renderExercises();
+      } catch(e) {}
+    }
+
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderExercises();
+    }
+
+    function filterExercises() { renderExercises(); }
+
+    function renderExercises() {
+      const q = document.getElementById('exercise-search').value.toLowerCase();
+      const filtered = allExercises.filter(e => {
+        const matchCat = currentCategory === 'all' || e.category === currentCategory;
+        const matchQ = !q || e.name.toLowerCase().includes(q);
+        return matchCat && matchQ;
+      });
+
+      const el = document.getElementById('exercise-list');
+      if (!filtered.length) {
+        el.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No exercises found.</div>';
+        return;
+      }
+      el.innerHTML = filtered.map(e => `
+        <div class="exercise-item ${selectedExercise?.id === e.id ? 'selected' : ''}"
+          onclick="selectExercise(${e.id}, '${e.name.replace(/'/g,"\\'")}', '${e.category}')">
+          <div class="exercise-name">${e.name}</div>
+          <div class="exercise-meta">${e.category} · ${e.equipment || 'bodyweight'}</div>
+        </div>`).join('');
+    }
+
+    function selectExercise(id, name, category) {
+      selectedExercise = { id, name, category };
+      setRows = [];
+      document.getElementById('selected-exercise-name').textContent = name;
+      document.getElementById('sets-section').classList.remove('hidden');
+      renderSetRows();
+      renderExercises();
+      addSetRow();
+    }
+
+    function addSetRow() {
+      const num = setRows.length + 1;
+      setRows.push({ set_number: num, reps: '', weight_kg: '', duration_secs: '' });
+      renderSetRows();
+    }
+
+    function renderSetRows() {
+      const isCardio = selectedExercise?.category === 'cardio';
+      document.getElementById('sets-container').innerHTML = setRows.map((s, i) => `
+        <div class="set-row">
+          <div class="set-num">${s.set_number}</div>
+          ${isCardio
+            ? `<input class="set-input" type="number" placeholder="duration (secs)"
+                id="set-dur-${i}" value="${s.duration_secs}"
+                oninput="setRows[${i}].duration_secs=this.value" style="grid-column:span 2"/>`
+            : `<input class="set-input" type="number" placeholder="reps"
+                id="set-reps-${i}" value="${s.reps}"
+                oninput="setRows[${i}].reps=this.value"/>
+               <input class="set-input" type="number" placeholder="kg" step="0.5"
+                id="set-kg-${i}" value="${s.weight_kg}"
+                oninput="setRows[${i}].weight_kg=this.value"/>`
+          }
+          <input class="set-input" type="text" placeholder="notes"
+            id="set-notes-${i}" value="${s.notes || ''}"
+            oninput="setRows[${i}].notes=this.value"/>
+          <button class="btn btn-danger btn-sm" onclick="removeSetRow(${i})">✕</button>
+        </div>`).join('');
+    }
+
+    function removeSetRow(index) {
+      setRows.splice(index, 1);
+      setRows.forEach((s, i) => s.set_number = i + 1);
+      renderSetRows();
+    }
+
+    async function saveSession() {
+      const alertEl = document.getElementById('alert-area');
+      const sessionDate = document.getElementById('session-date').value;
+
+      try {
+        // create session
+        const sessionPayload = {
+          date: sessionDate,
+          name: document.getElementById('session-name').value || null,
+          duration_mins: parseInt(document.getElementById('session-duration').value) || null,
+          intensity: document.getElementById('session-intensity').value,
+          notes: document.getElementById('session-notes').value || null,
+          is_rest_day: isSessionRest
+        };
+        const session = await API.post('/workout/sessions', sessionPayload);
+
+        // log sets if not rest day
+        if (!isSessionRest && selectedExercise && setRows.length) {
+          for (const row of setRows) {
+            if (!row.reps && !row.duration_secs) continue;
+            await API.post(`/workout/sessions/${session.id}/sets`, {
+              exercise_id: selectedExercise.id,
+              set_number: row.set_number,
+              reps: parseInt(row.reps) || null,
+              weight_kg: parseFloat(row.weight_kg) || null,
+              duration_secs: parseInt(row.duration_secs) || null,
+              notes: row.notes || null
+            });
+          }
+        }
+
+        alertEl.innerHTML = '<div class="alert alert-success">Session saved.</div>';
+        setTimeout(() => alertEl.innerHTML = '', 3000);
+
+        // reset
+        selectedExercise = null;
+        setRows = [];
+        document.getElementById('session-name').value = '';
+        document.getElementById('session-notes').value = '';
+        document.getElementById('sets-section').classList.add('hidden');
+        renderExercises();
+        loadRecentSessions();
+      } catch(e) {
+        alertEl.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function addCustomExercise() {
+      const name = document.getElementById('custom-name').value.trim();
+      if (!name) return;
+      try {
+        const ex = await API.post('/workout/exercises', {
+          name,
+          category: document.getElementById('custom-category').value,
+          equipment: document.getElementById('custom-equipment').value
+        });
+        allExercises.push(ex);
+        document.getElementById('custom-name').value = '';
+        renderExercises();
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-success">"${ex.name}" added to exercise library.</div>`;
+        setTimeout(() => document.getElementById('alert-area').innerHTML = '', 3000);
+      } catch(e) {
+        document.getElementById('alert-area').innerHTML =
+          `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    async function loadRecentSessions() {
+      const to = today();
+      const from = new Date();
+      from.setDate(from.getDate() - 13);
+      const fromStr = from.toISOString().split('T')[0];
+
+      try {
+        const sessions = await API.get(`/workout/sessions/range/list?from_date=${fromStr}&to_date=${to}`);
+        const el = document.getElementById('recent-sessions');
+        if (!sessions.length) {
+          el.innerHTML = '<div style="font-size:13px;color:var(--text3)">No sessions logged yet.</div>';
+          return;
+        }
+
+        el.innerHTML = sessions.map(s => {
+          if (s.is_rest_day) {
+            return `<div class="session-card">
+              <div class="session-header">
+                <div>
+                  <div class="session-name">🛌 Rest day</div>
+                  <div class="session-meta">${s.date}</div>
+                </div>
+                <button class="btn btn-danger btn-sm" onclick="deleteSession(${s.id})">✕</button>
+              </div>
+            </div>`;
+          }
+
+          // group sets by exercise
+          const byExercise = {};
+          s.sets.forEach(set => {
+            const key = set.exercise_name || `Exercise #${set.exercise_id}`;
+            if (!byExercise[key]) byExercise[key] = [];
+            byExercise[key].push(set);
+          });
+
+          const setsHTML = Object.entries(byExercise).map(([exName, sets]) => `
+            <div class="exercise-group">
+              <div class="exercise-group-name">${exName}</div>
+              ${sets.map(set => `
+                <div class="set-summary-row">
+                  <span class="set-summary-num">Set ${set.set_number}</span>
+                  ${set.reps ? `<span>${set.reps} reps</span>` : ''}
+                  ${set.weight_kg ? `<span>${set.weight_kg} kg</span>` : ''}
+                  ${set.duration_secs ? `<span>${set.duration_secs}s</span>` : ''}
+                </div>`).join('')}
+            </div>`).join('');
+
+          return `<div class="session-card">
+            <div class="session-header">
+              <div>
+                <div class="session-name">${s.name || 'Workout'}</div>
+                <div class="session-meta">${s.date} · ${s.duration_mins ? s.duration_mins + 'min' : ''} · ${s.intensity || ''}</div>
+              </div>
+              <button class="btn btn-danger btn-sm" onclick="deleteSession(${s.id})">✕</button>
+            </div>
+            ${setsHTML}
+          </div>`;
+        }).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    async function deleteSession(id) {
+      if (!confirm('Delete this session?')) return;
+      try {
+        await API.delete(`/workout/sessions/${id}`);
+        loadRecentSessions();
+      } catch(e) {}
+    }
+
+    loadExercises();
+    loadRecentSessions();
+  </script>
+</body>
+</html>
